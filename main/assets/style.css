@@ -1,0 +1,46 @@
+body{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    background-color: black;
+}
+
+.top{
+    text-align: center;
+    border: 0px;
+    justify-content: center;
+
+}
+
+.container{
+    max-width: 500px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.text{
+    color: rgb(200, 200, 200);
+    width: 200px;
+}
+
+#truck{
+    width: auto;
+}
+
+#logo{
+    width: 50%;
+}
+
+#btn{
+    color: aliceblue;
+    border: 0px;
+    background-color: darkgreen;
+    shape-margin: 3px;
+    shape-rendering: geometricPrecision;
+    border-radius: 20px;
+    width: 100px;
+    height: 35px;
+    font-size: 20px;
+}
