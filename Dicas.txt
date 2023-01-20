@@ -1,0 +1,181 @@
+Para montar o file-system
+
+esp_vfs_spiffs_conf_t conf = {
+        .base_path = "/spiffs",
+        .partition_label = NULL,
+        .max_files = 5,
+        .format_if_mount_failed = true};
+
+    ret = esp_vfs_spiffs_register(&conf);
+    if (ret != ESP_OK)
+    {
+        if (ret == ESP_FAIL)
+        {
+            printf("FAILURE MOUNTING FS\n");
+        }
+        else if (ret == ESP_ERR_NOT_FOUND)
+        {
+            printf("PARTITION NOT FOUND");
+        }
+        else
+        {
+            printf("FS FAILURE");
+        }
+    }
+
+
+partitions.csv:
+# ESP-IDF Partition Table,,,,,
+# Name,Type,SubType,Offset,Size,Flags
+nvs,data,nvs,0x9000,16K,
+otadata,data,ota,0xd000,8K,
+phy_init,data,phy,0xf000,4K,
+factory,app,factory,0x010000,4300K,
+#ota_0,app,ota_0,,1300K,
+#ota_1,app,ota_1,,1300K,
+storage,data,spiffs,,1000K,
+
+
+function formLoad() {
+			$.ajax({
+				type: "GET",
+				url: "/config-get",
+				success: function (result) {
+					console.log("data loaded:");
+					// /console.log(JSON.stringify(result));
+					populateForm(JSON.parse(JSON.stringify(result)));
+				},
+				error: function (result) {
+					alert('error');
+				}
+			});
+		}
+		function formPush(e) {
+			console.log("formpush");
+			var options = getFormData();
+			console.log(JSON.stringify(options));
+			$.ajax({
+				type: "POST",
+				url: "/config-post",
+				data: JSON.stringify(options),
+				contentType: "application/json",
+				dataType: 'json',
+				success: function (result) {
+					populateForm(JSON.parse(JSON.stringify(result)));
+				},
+				error: function (result) {
+					alert('error');
+				}
+			});
+
+		}
+/* Handler to download a file kept on the server */
+
+
+static esp_err_t root_get_handler(httpd_req_t *req)
+{
+    extern const uint8_t index_html_start[] asm("_binary_index_html_start"); // uint8_t
+    extern const uint8_t index_html_end[] asm("_binary_index_html_end");     // uint8_t
+
+    set_content_type_from_file(req, "index.html");
+
+    httpd_resp_send(req, (char *)index_html_start, index_html_end - index_html_start - 1);
+    return ESP_OK;
+}
+
+
+/* Handler to download a file kept on the server */
+static esp_err_t download_get_handler(httpd_req_t *req)
+{
+    char filepath[FILE_PATH_MAX];
+
+    const char *filename = get_path_from_uri(filepath, "/",
+                                             req->uri, sizeof(filepath));
+    if (!filename)
+    {
+        ESP_LOGE(TAG, "Filename is too long");
+        /* Respond with 500 Internal Server Error */
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Filename too long");
+        return ESP_FAIL;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Client asked for:%s", filename);
+    }
+
+    // extern const uint8_t index_html_start[] asm("_binary_index_html_start"); // uint8_t
+    // extern const uint8_t index_html_end[] asm("_binary_index_html_end");     // uint8_t
+
+    extern const uint8_t jquery_min_js_start[] asm("_binary_jquery_min_js_start"); // uint8_t
+    extern const uint8_t jquery_min_js_end[] asm("_binary_jquery_min_js_end");     // uint8_t
+
+    extern const uint8_t jquery_ui_min_js_start[] asm("_binary_jquery_ui_min_js_start"); // uint8_t
+    extern const uint8_t jquery_ui_min_js_end[] asm("_binary_jquery_ui_min_js_end");     // uint8_t
+
+    // httpd_resp_set_type(req, "text/html");
+    // httpd_resp_send(req, (const char *)index_html_start, index_size);
+    struct extern_asset_file_t
+    {
+        const char *filename;
+        const uint8_t *start;
+        const uint8_t *end;
+    };
+#define N_FILES 2
+    struct extern_asset_file_t files[N_FILES] = {
+        //{"/", index_html_start, index_html_end},
+        //{"/generate_204", index_html_start, index_html_end}, //this one is the captive portal url asked by some android phones
+        //{"/gen_204", index_html_start, index_html_end}, //this one is the captive portal url asked by some android phones
+        {"/js/jquery.min.js", jquery_min_js_start, jquery_min_js_end},
+        {"/js/jquery-ui.min.js", jquery_ui_min_js_start, jquery_ui_min_js_end}};
+    // find pointer to the requested asset
+    ESP_LOGI(TAG, "Registered %d files", N_FILES);
+    int good_file = 0;
+    for (int i = 0; i < N_FILES; i++)
+    {
+        struct extern_asset_file_t *file = &(files[i]);
+
+        // ESP_LOGI(TAG, "%s[%d] - %s[%d] - %d", files[i].filename, strlen(files[i].filename), filename, strlen(filename), size);
+        if (strcmp(filename, file->filename) == 0)
+        {
+            uint32_t size = file->end - file->start - 1;
+            ESP_LOGI(TAG, "File[%s] was found, must send it", file->filename);
+            if (i < 3)
+            {
+                set_content_type_from_file(req, "index.html");
+            }
+            else
+            {
+                set_content_type_from_file(req, filename);
+            }
+
+            httpd_resp_send(req, (char *)file->start, size);
+            good_file = 1;
+        }
+    }
+
+    if (!good_file)
+    {
+        ESP_LOGE(TAG, "Failed to stat file : %s", filepath);
+        // Respond with 404 Not Found
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "File does not exist");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "File sending complete");
+
+    /* Respond with an empty chunk to signal HTTP response completion */
+#ifdef CONFIG_EXAMPLE_HTTPD_CONN_CLOSE_HEADER
+    httpd_resp_set_hdr(req, "Connection", "close");
+#endif
+    httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;
+}
+
+
+/* URI handler for getting uploaded files */
+httpd_uri_t file_get = {
+    .uri = "/js/*", // Match all URIs of type /path/to/file
+    .method = HTTP_GET,
+    .handler = download_get_handler,
+    //.user_ctx  = server_data    // Pass server data as context
+};
