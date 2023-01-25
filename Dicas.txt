@@ -26,7 +26,7 @@ esp_vfs_spiffs_conf_t conf = {
 
 partitions.csv:
 # ESP-IDF Partition Table,,,,,
-# Name,Type,SubType,Offset,Size,Flags
+# Name,Type,SubType,Offset,Size,Flags 
 nvs,data,nvs,0x9000,16K,
 otadata,data,ota,0xd000,8K,
 phy_init,data,phy,0xf000,4K,
