@@ -1,0 +1,7 @@
+build/**
+node_modules/**
+.devcontainer/devcontainer.json
+.devcontainer/Dockerfile
+package-lock.json
+package.json
+

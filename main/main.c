@@ -19,14 +19,13 @@
 #include "esp_spiffs.h"
 #include "esp_http_server.h"
 
-#include "bmp280.h"
-
 #include "driver/i2c.h"
 #include "iot_servo.h"
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include "cJSON.h"
 
 #include "nvs_flash.h"
 #include "lwip/err.h"
@@ -204,11 +203,14 @@ static esp_err_t root_assets_handler(httpd_req_t *req){
 }
 
 static esp_err_t direction_handler(httpd_req_t *req){
-    if(angle == 0)
-        angle = 89;
-    else
-        angle = 0;
-    direction(angle);
+    uint8_t angle;
+    char *content = malloc(req->content_len*sizeof(char*));
+    httpd_req_recv(req, content, req->content_len);
+    ESP_LOGI(TAG, "received: %s", content);
+    cJSON_Parse(content);
+    ESP_LOGI(TAG, "parsed: %s", content);
+
+    //direction(angle);
     httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
 }
@@ -407,10 +409,10 @@ uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t 
 
 void app_main() {
     esp_err_t ret;
-    uint8_t rx_data[5];
-    int8_t i2cRet;
-    uint8_t *press = malloc(2*sizeof(uint8_t));
-    uint8_t *temp = malloc(2*sizeof(uint8_t));
+    // uint8_t rx_data[5];
+    // int8_t i2cRet;
+    // uint8_t *press = malloc(2*sizeof(uint8_t));
+    // uint8_t *temp = malloc(2*sizeof(uint8_t));
     
     peripherical_init();
 
@@ -434,21 +436,16 @@ void app_main() {
     }
     ESP_LOGI(TAG, "DALE\n");
     ESP_ERROR_CHECK(ret);
-
     
-    // if(ret != ESP_OK){
-    //     ESP_LOGI(TAG, "I2C Error !!!\n");    
+    // i2c_write(BMP280_ADDR, 0xF4, (uint8_t*)0x27, 1);
+    // while(1){
+    //     vTaskDelay(200);
+    //     i2cRet = i2c_read(BMP280_ADDR,0xF3, press, 2);
+    //     ESP_LOG_BUFFER_HEX(TAG, press, 2);
+    //     i2cRet = i2c_read(BMP280_ADDR,0xF4, temp,2);
+    //     ESP_LOG_BUFFER_HEX(TAG, temp, 2);
+    //     ESP_LOGI(TAG,"-----------");
     // }
-    // ESP_LOGI(TAG, "I2C read mode active !!!\n"); 
-    i2c_write()
-    while(1){
-        vTaskDelay(200);
-        i2cRet = i2c_read(BMP280_ADDR,0xF3, press, 2);
-        ESP_LOG_BUFFER_HEX(TAG, press, 2);
-        i2cRet = i2c_read(BMP280_ADDR,0xF4, temp,2);
-        ESP_LOG_BUFFER_HEX(TAG, temp, 2);
-        ESP_LOGI(TAG,"-----------");
-    }
 
     iot_servo_deinit(LEDC_LOW_SPEED_MODE);
 }

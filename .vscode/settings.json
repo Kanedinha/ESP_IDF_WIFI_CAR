@@ -16,6 +16,8 @@
         "array": "c",
         "string": "c",
         "string_view": "c",
-        "i2c.h": "c"
+        "i2c.h": "c",
+        "stdlib.h": "c",
+        "param.h": "c"
     }
 }

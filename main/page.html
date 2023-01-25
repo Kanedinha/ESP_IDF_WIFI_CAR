@@ -5,25 +5,54 @@
         <title>Kaneda</title>
         <link rel="icon" type="image/x-icon" href="assets/F.ico">
         <link rel="stylesheet" href="assets/style.css">
+        <script src="jquery.js"></script>
     </head>
 
-    <body>
+    <body onload="monitoring()">
         <header>
             <div class="top">
+                <img type="image/gif" src="assets/trator.gif" alt="Vrum Vrum" id="truck">
                 <img type="image/png" src="assets/Fortron.png" alt="Fortron" id="logo"> 
-                <br>
                 <img type="image/gif" src="assets/trator.gif" alt="Vrum Vrum" id="truck">
             </div>    
         </header>
         
-        
-        <div class="container"> 
-            <h1 class="text">
-                Speed: 
-            </h1>
-            <br>
-            <button id="btn">direction</button>
+        <div class="flex-container">
+            <div class="Xdir">
+                <button class="btn" id="esquerda">
+                    ⇠
+                </button>
+                <button class="btn" id="direita">
+                    ⇢
+                </button>
+            </div>
+            <div class="CAM">
+                <p class="text">CAM</p>
+            </div>
+            <div class="Ydir">
+                <button class="btn" id="cima">
+                    ⇡
+                </button>
+                <button class="btn" id="baixo">
+                    ⇣
+                </button>
+            </div>
         </div>
+
+        <div class="info-container">
+            <div class="Battery" id="Bat">
+                <p class="text">Battery: 100%  ┤█ █ █ █│</p>
+                <p class="text" id="BatError">×</p>
+                <p class="text" id="BatCheck">√</p>
+            </div>
+            <div class="Speed" id="Spe">
+                <p class="text" >Speed: x Km/h</p>
+            </div>
+            <div class="Temperature" id="Temp">
+                <p class="text">Temperature: x ºC</p>
+            </div>
+        </div>
+        
         <script type="application/javascript" src="assets/code.js"></script>
     </body>
 </html>

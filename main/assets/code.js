@@ -1,27 +1,60 @@
 var speed = 0;
 var dir = 0;
-var btn = document.getElementById("btn");
 
-btn.addEventListener("click", send, false)
 
-function send(){
-    var xhttp = new XMLHttpRequest();
-    var upload_path = "/direction";
-    xhttp.onreadystatechange = function() {
-        if (xhttp.readyState == 4) {
-            if (xhttp.status == 200) {
-                
-            } 
-            else if (xhttp.status == 0) {
-                alert("Server closed the connection abruptly!");
-                location.reload()
-            } 
-            else {
-                alert(xhttp.status + " Error!\n" + xhttp.responseText);
-                location.reload()
-            }
+$(document.getElementsById("esquerda")).mousedown(function(){
+    dir = 0;
+    while(!(this).mouseup()){
+        direction_send();
+    }
+    dir = 30;
+    direction_send();
+});
+
+
+$(document.getElementsById("direita")).mousedown(function(){
+    dir = 50
+    while(!(this).mouseup()){
+        direction_send();
+    }
+    dir = 30;
+    direction_send();
+});
+
+$(document.getElementsById("cima")).mousedown(function(){
+    speed = 100;
+    while(!(this).mouseup()){
+        direction_send();
+    }
+    speed = 0;
+    direction_send();
+});
+
+$(document.getElementsById("baixo")).mousedown(function(){
+    speed = -100;
+    while(!(this).mouseup()){
+        direction_send();
+    }
+    speed = 0;
+    direction_send();
+});
+
+$(document).ready(function(){
+    setInterval( function(){
+    
+    }, 1000);
+});
+
+function direction_send(){
+
+    direction = "X:" + dir + "Y:" + speed + "end";
+    $.ajax({
+        type: "POST",
+        url: "/direction",
+        data: JSON.stringify(directon),
+        success: function(result){},
+        error: function (result) {
+            alert('error');
         }
-    };
-    xhttp.open("POST", upload_path, true);
-    xhttp.send();
+    });
 }

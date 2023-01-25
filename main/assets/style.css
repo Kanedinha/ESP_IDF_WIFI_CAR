@@ -5,6 +5,87 @@ body{
     background-color: black;
 }
 
+.info-container{
+    display: flex;
+    flex-wrap: nowrap;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.Battery{
+    width: 300px;
+    height: 10px;
+    margin: auto;
+    background-color: black;
+    text-align: left;
+    display: flex;
+    flex-wrap: nowrap;
+}
+
+.Speed{
+    width: 200px;
+    height: 10px;
+    margin: auto;
+    background-color: black;
+    text-align: left;
+    display: flex;
+    flex-wrap: nowrap;
+}
+
+.Temperature{
+    width: 200px;
+    height: 10px;
+    margin: auto;
+    background-color: black;
+    text-align: left;
+    display: flex;
+    flex-wrap: nowrap;
+}
+
+.flex-container {
+    display: flex;
+    flex-wrap: nowrap;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.Xdir {
+    width: 200px;
+    height: 200px;
+    margin: auto;
+    background-color: rgb(70,70,70);
+    text-align: center;
+    align-content: center;
+    display: flex;
+    flex-wrap: nowrap;
+    border-radius: 25px;
+}
+
+.Ydir {
+    width: 200px;
+    height: 200px;
+    margin: auto;
+    padding: auto;
+    background-color: rgb(70,70,70);
+    text-align: center;
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    border-radius: 25px;
+}
+
+.CAM {
+    width: 65%;
+    height: 400px;
+    margin: auto;
+    background-color: rgb(70,70,70);
+    text-align: center;
+    vertical-align: middle;
+    display: flex;
+    flex-wrap: wrap;
+    border-radius: 25px;
+}
+
 .top{
     text-align: center;
     border: 0px;
@@ -23,24 +104,76 @@ body{
 .text{
     color: rgb(200, 200, 200);
     width: 200px;
+    white-space: break-spaces;
 }
 
-#truck{
-    width: auto;
-}
-
-#logo{
-    width: 50%;
-}
-
-#btn{
+.btn{
     color: aliceblue;
     border: 0px;
     background-color: darkgreen;
-    shape-margin: 3px;
+    margin: auto;
     shape-rendering: geometricPrecision;
-    border-radius: 20px;
-    width: 100px;
-    height: 35px;
-    font-size: 20px;
+    border-radius: 25px;
+    width: 50px;
+    height: 50px;
+    font-size: 40px;
+}
+
+.btn:hover{
+    cursor: pointer;
+    border-radius: 30px;
+    width: 60px;
+    height: 60px;
+    font-size: 50px;
+}
+
+#truck{
+    width: 10%;
+    margin: 5px;
+}
+
+#logo{
+    width: 30%;
+    margin: 5px;
+}
+
+#cima{
+    margin-left: 75px;
+    margin-top: 25px;
+}
+#baixo{
+    margin-left: 75px;
+    margin-bottom: 25px;
+}
+#baixo:hover{
+    margin-left: 70px;
+    margin-bottom: 20px;
+}
+#cima:hover{
+    margin-left: 70px;
+    margin-top: 20px;
+}
+
+#esquerda{
+    margin-left: 25px;
+    margin-top: 75px;
+}
+#direita{
+    margin-right: 25px;
+    margin-top: 75px;
+}
+#esquerda:hover{
+    margin-left: 20px;
+    margin-top: 70px;
+}
+#direita:hover{
+    margin-right: 20px;
+    margin-top: 70px;
+}
+
+#BatError{
+    color: red;
+}
+#BatCheck{
+    color: green;
 }
