@@ -41,7 +41,16 @@ $(document.getElementsById("baixo")).mousedown(function(){
 
 $(document).ready(function(){
     setInterval( function(){
-    
+        ("#Bat").load("sensors/BatteryLevel/lvl.txt", function(responseTxt, statusTxt, xhr){
+            if(statusTxt == "success"){
+                ("#BatError").hide();
+                ("#BatCheck").show();
+            }
+            else{
+                ("#BatError").show();
+                ("#BatCheck").hide();
+            }
+        });
     }, 1000);
 });
 

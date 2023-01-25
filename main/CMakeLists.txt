@@ -1,4 +1,4 @@
 idf_component_register(
     SRCS "iot_servo.c" "main.c"
     INCLUDE_DIRS "." 
-    EMBED_TXTFILES "page.html" "assets/code.js" "assets/style.css" "assets/Fortron.png" "assets/trator.gif" "assets/F.ico" )
+    EMBED_TXTFILES "page.html" "assets/code.js" "assets/style.css" "assets/Fortron.png" "assets/trator.gif" "assets/F.ico" "assets/jquery-3.6.3.min.js")
