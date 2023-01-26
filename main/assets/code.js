@@ -9,7 +9,7 @@ var dir = 0;
 //     dir = 30;
 //     direction_send();
 // });
-
+ 
 $(".btn").click(function(){
     alert('click');
     if(dir == 0)

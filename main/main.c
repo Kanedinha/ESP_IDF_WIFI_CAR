@@ -177,7 +177,7 @@ static esp_err_t root_assets_handler(httpd_req_t *req){
         set_content_type_from_file(req, (char*)req->uri);
         httpd_resp_send(req, (char *)trator_start, trator_end - trator_start - 1);
         ESP_LOGI(TAG, "%d req: %s", __LINE__, (char*)req->uri);
-    }
+    } 
     else if(strcasecmp((char*)req->uri, "/assets/style.css") == 0){
         extern const uint8_t style_start[] asm("_binary_style_css_start"); // uint8_t
         extern const uint8_t style_end[] asm("_binary_style_css_end");     // uint8_t
