@@ -98,7 +98,7 @@ static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filena
     else if (IS_FILE_EXT(filename, ".js"))
     {
         ESP_LOGI(TAG, "file is a .js");
-        return httpd_resp_set_type(req, ".js");
+        return httpd_resp_set_type(req, "application/javascript");
     }
     else if (IS_FILE_EXT(filename, ".css"))
     {
@@ -200,17 +200,17 @@ static esp_err_t root_assets_handler(httpd_req_t *req){
         ESP_LOGI(TAG, "%d req: %s", __LINE__, (char*)req->uri);
     }
     else if(strcasecmp((char*)req->uri, "/assets/jquery-3.6.3.min.js") == 0){
-        extern const uint8_t F_start[] asm("_binary_jquery-3.6.3.min_js_start"); // uint8_t
-        extern const uint8_t F_end[] asm("_binary_jquery-3.6.3.min_js_end");     // uint8_t
+        extern const uint8_t jquery_start[] asm("_binary_jquery_3_6_3_min_js_start"); // uint8_t
+        extern const uint8_t jquery_end[] asm("_binary_jquery_3_6_3_min_js_end");     // uint8_t
         set_content_type_from_file(req, (char*)req->uri);
-        httpd_resp_send(req, (char *)F_start, F_end - F_start - 1);
+        httpd_resp_send(req, (char *)jquery_start, jquery_end - jquery_start - 1);
         ESP_LOGI(TAG, "%d req: %s", __LINE__, (char*)req->uri);
     }
     return ESP_OK;
 }
 
 static esp_err_t direction_handler(httpd_req_t *req){
-    uint8_t angle;
+    //uint8_t angle;
     char *content = malloc(req->content_len*sizeof(char*));
     httpd_req_recv(req, content, req->content_len);
     ESP_LOGI(TAG, "received: %s", content);
