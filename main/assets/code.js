@@ -2,8 +2,18 @@ var speed = 0;
 var dir = 0;
 
 
-$(document.getElementsById("esquerda")).mousedown(function(){
+$("#esquerda").on("taphold", function(){
     dir = 0;
+    direction_send();
+    $("#esquerda").mouseup(function(){
+        dir = 30;
+        direction_send();    
+    });
+});
+
+
+$("#direita").mousedown(function(){
+    dir = 50;
     while(!(this).mouseup()){
         direction_send();
     }
@@ -11,17 +21,7 @@ $(document.getElementsById("esquerda")).mousedown(function(){
     direction_send();
 });
 
-
-$(document.getElementsById("direita")).mousedown(function(){
-    dir = 50
-    while(!(this).mouseup()){
-        direction_send();
-    }
-    dir = 30;
-    direction_send();
-});
-
-$(document.getElementsById("cima")).mousedown(function(){
+$("#cima").mousedown(function(){
     speed = 100;
     while(!(this).mouseup()){
         direction_send();
@@ -30,7 +30,7 @@ $(document.getElementsById("cima")).mousedown(function(){
     direction_send();
 });
 
-$(document.getElementsById("baixo")).mousedown(function(){
+$("#baixo").mousedown(function(){
     speed = -100;
     while(!(this).mouseup()){
         direction_send();
@@ -49,13 +49,13 @@ $(document).ready(function(){
             else{
                 ("#BatError").show();
                 ("#BatCheck").hide();
+                alert('aaaa');
             }
         });
     }, 1000);
 });
 
 function direction_send(){
-
     direction = "X:" + dir + "Y:" + speed + "end";
     $.ajax({
         type: "POST",
