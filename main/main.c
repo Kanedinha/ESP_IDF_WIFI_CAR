@@ -43,16 +43,16 @@
 #define I2C_MASTER_FREQ_HZ 40000
 #define I2C_MASTER_SDA_IO 21
 #define I2C_MASTER_SCL_IO 22
-#define BMP280_ADDR 0x76
+// #define BMP280_ADDR 0x76
 
-#define I2C_MASTER_TX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
-#define I2C_MASTER_RX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
-#define WRITE_BIT I2C_MASTER_WRITE  /*!< I2C master write */
-#define READ_BIT I2C_MASTER_READ    /*!< I2C master read */
-#define ACK_CHECK_EN 0x1            /*!< I2C master will check ack from slave*/
-#define ACK_CHECK_DIS 0x0           /*!< I2C master will not check ack from slave */
-#define ACK_VAL 0x0                 /*!< I2C ack value */
-#define NACK_VAL 0x1                /*!< I2C nack value */
+// #define I2C_MASTER_TX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
+// #define I2C_MASTER_RX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
+// #define WRITE_BIT I2C_MASTER_WRITE  /*!< I2C master write */
+// #define READ_BIT I2C_MASTER_READ    /*!< I2C master read */
+// #define ACK_CHECK_EN 0x1            /*!< I2C master will check ack from slave*/
+// #define ACK_CHECK_DIS 0x0           /*!< I2C master will not check ack from slave */
+// #define ACK_VAL 0x0                 /*!< I2C ack value */
+// #define NACK_VAL 0x1                /*!< I2C nack value */
 
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + CONFIG_SPIFFS_OBJ_NAME_LEN)
 #define SCRATCH_BUFSIZE  8192
@@ -120,8 +120,9 @@ static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filena
     return httpd_resp_set_type(req, "text/plain");
 }
 
-void direction(float angle){
-    iot_servo_write_angle(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, angle);
+void set_direction(float angle){
+    ESP_LOGI(TAG, "angle: %.2f", angle);
+    iot_servo_write_angle(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, (float)angle);
 }
 
 static const char* get_path_from_uri(char *dest, const char *base_path, const char *uri, size_t destsize)
@@ -210,15 +211,19 @@ static esp_err_t root_assets_handler(httpd_req_t *req){
 }
 
 static esp_err_t direction_handler(httpd_req_t *req){
-    //uint8_t angle;
+    int angle;
     char *content = malloc(req->content_len*sizeof(char*));
     httpd_req_recv(req, content, req->content_len);
     ESP_LOGI(TAG, "received: %s", content);
-    cJSON_Parse(content);
-    ESP_LOGI(TAG, "parsed: %s", content);
+    cJSON *direction = cJSON_Parse(content);
+    char *json = NULL;
+    json = cJSON_Print(direction);
+    ESP_LOGI(TAG, "parsed: %s", json);
+    angle = cJSON_GetObjectItem(direction,"X")->valueint;
 
-    //direction(angle);
+    set_direction((float)angle);
     httpd_resp_send_chunk(req, NULL, 0);
+    cJSON_Delete(direction);
     return ESP_OK;
 }
 
@@ -355,64 +360,64 @@ void peripherical_init(){
     };
 
     iot_servo_init(LEDC_LOW_SPEED_MODE, &servo_cfg);
-    direction(0);
+    set_direction(0);
 
-    ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
-    i2c_config_t conf = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = I2C_MASTER_SDA_IO,         // select GPIO specific to your project
-        .scl_io_num = I2C_MASTER_SCL_IO,         // select GPIO specific to your project
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = I2C_MASTER_FREQ_HZ,  // select frequency specific to your project
-        .clk_flags = 0,                          // you can use I2C_SCLK_SRC_FLAG_* flags to choose i2c source clock here
-    };
-    i2c_param_config(I2C_NUM_0, &conf);
+    // ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
+    // i2c_config_t conf = {
+    //     .mode = I2C_MODE_MASTER,
+    //     .sda_io_num = I2C_MASTER_SDA_IO,         // select GPIO specific to your project
+    //     .scl_io_num = I2C_MASTER_SCL_IO,         // select GPIO specific to your project
+    //     .sda_pullup_en = GPIO_PULLUP_ENABLE,
+    //     .scl_pullup_en = GPIO_PULLUP_ENABLE,
+    //     .master.clk_speed = I2C_MASTER_FREQ_HZ,  // select frequency specific to your project
+    //     .clk_flags = 0,                          // you can use I2C_SCLK_SRC_FLAG_* flags to choose i2c source clock here
+    // };
+    // i2c_param_config(I2C_NUM_0, &conf);
   
 
 }
 
-void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt)
-{
-	uint8_t iError = 0;
+// void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt)
+// {
+// 	uint8_t iError = 0;
 
-	esp_err_t espRc;
-	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+// 	esp_err_t espRc;
+// 	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 
-	i2c_master_start(cmd);
-	i2c_master_write_byte(cmd, (dev_addr << 1) | I2C_MASTER_WRITE, true);
+// 	i2c_master_start(cmd);
+// 	i2c_master_write_byte(cmd, (dev_addr << 1) | I2C_MASTER_WRITE, true);
 
-	i2c_master_write_byte(cmd, reg_addr, true);
-	i2c_master_write(cmd, reg_data, cnt, true);
-	i2c_master_stop(cmd);
+// 	i2c_master_write_byte(cmd, reg_addr, true);
+// 	i2c_master_write(cmd, reg_data, cnt, true);
+// 	i2c_master_stop(cmd);
 
-	espRc = i2c_master_cmd_begin(I2C_NUM_0, cmd, 10 / portTICK_PERIOD_MS);
+// 	espRc = i2c_master_cmd_begin(I2C_NUM_0, cmd, 10 / portTICK_PERIOD_MS);
 	
-	i2c_cmd_link_delete(cmd);
-}
+// 	i2c_cmd_link_delete(cmd);
+// }
 
-uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt)
-{
-	uint8_t iError = 0;
-	esp_err_t espRc;
+// uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt)
+// {
+// 	uint8_t iError = 0;
+// 	esp_err_t espRc;
 
-	  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-            i2c_master_start(cmd);
-            if (reg_addr != -1) {
-                i2c_master_write_byte(cmd, dev_addr << 1 | WRITE_BIT, ACK_CHECK_EN);
-                i2c_master_write_byte(cmd, reg_addr, ACK_CHECK_EN);
-                i2c_master_start(cmd);
-            }
-            i2c_master_write_byte(cmd, dev_addr << 1 | READ_BIT, ACK_CHECK_EN);
-            if (cnt > 1) {
-                i2c_master_read(cmd, reg_data, cnt - 1, ACK_VAL);
-            }
-            i2c_master_read_byte(cmd, reg_data + cnt - 1, NACK_VAL);
-            i2c_master_stop(cmd);
-            esp_err_t ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, 1000 / portTICK_PERIOD_MS);
-            i2c_cmd_link_delete(cmd);
-	        return iError;
-}
+// 	  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+//             i2c_master_start(cmd);
+//             if (reg_addr != -1) {
+//                 i2c_master_write_byte(cmd, dev_addr << 1 | WRITE_BIT, ACK_CHECK_EN);
+//                 i2c_master_write_byte(cmd, reg_addr, ACK_CHECK_EN);
+//                 i2c_master_start(cmd);
+//             }
+//             i2c_master_write_byte(cmd, dev_addr << 1 | READ_BIT, ACK_CHECK_EN);
+//             if (cnt > 1) {
+//                 i2c_master_read(cmd, reg_data, cnt - 1, ACK_VAL);
+//             }
+//             i2c_master_read_byte(cmd, reg_data + cnt - 1, NACK_VAL);
+//             i2c_master_stop(cmd);
+//             esp_err_t ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, 1000 / portTICK_PERIOD_MS);
+//             i2c_cmd_link_delete(cmd);
+// 	        return iError;
+// }
 
 void app_main() {
     esp_err_t ret;
@@ -453,6 +458,11 @@ void app_main() {
     //     ESP_LOG_BUFFER_HEX(TAG, temp, 2);
     //     ESP_LOGI(TAG,"-----------");
     // }
+    while (1)
+    {
+        vTaskDelay(1000);
+    }
+    
 
     iot_servo_deinit(LEDC_LOW_SPEED_MODE);
 }

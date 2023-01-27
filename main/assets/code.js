@@ -1,35 +1,38 @@
 var speed = 0;
-var dir = 0; 
+var dir = 0;
+var up = 0;
 
-// $(document.getElementsById("direita")).mousedown(function(){
-//     dir = 50;
-//     while(!(this).mouseup()){
-//         direction_send();
-//     }
-//     dir = 30;
-//     direction_send();
-// });
- 
-$(".btn").click(function(){
-    alert('click');
-    if(dir == 0)
-        dir = 50;
-    else
-        dir = 0;
-    direction_send();
+$("#direita").mousedown(function () {
+    up = setInterval(function () {
+        if (dir < 70)
+            dir += 1;
+        direction_send();
+    }, 50);
 });
 
+$("#direita").mouseup(function () {
+    clearInterval(up);
+});
 
-function direction_send(){
-alert('send');
-    direction = "X:" + dir + "Y:" + speed + "end";
+$("#esquerda").mousedown(function () {
+    up = setInterval(function () {
+        if (dir > 0)
+            dir -= 1;
+        direction_send();
+    }, 50);
+});
+
+$("#esquerda").mouseup(function () {
+    clearInterval(up);
+});
+
+function direction_send() {
+    direction = { X: dir, Y: speed };
     $.ajax({
         type: "POST",
         url: "/direction",
-        data: JSON.stringify(directon),
-        success: function(result){
-            alert('success');
-        },
+        data: JSON.stringify(direction),
+        success: function (result) { },
         error: function (result) {
             alert('error');
         }
