@@ -7,7 +7,7 @@ $("#direita").mousedown(function () {
         if (dir < 70)
             dir += 1;
         direction_send();
-    }, 50);
+    }, 150);
 });
 
 $("#direita").mouseup(function () {
@@ -19,7 +19,7 @@ $("#esquerda").mousedown(function () {
         if (dir > 0)
             dir -= 1;
         direction_send();
-    }, 50);
+    }, 150);
 });
 
 $("#esquerda").mouseup(function () {

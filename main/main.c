@@ -20,6 +20,7 @@
 #include "esp_http_server.h"
 
 #include "driver/i2c.h"
+#include "driver/ledc.h"
 #include "iot_servo.h"
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
@@ -31,7 +32,7 @@
 #include "lwip/err.h"
 #include "lwip/sys.h"
 
-#define SERVO_CH0_PIN 2
+#define SERVO_CH0_PIN 0
 
 #define EXAMPLE_ESP_WIFI_SSID      "Projetos"
 #define EXAMPLE_ESP_WIFI_PASS      "ftn22182"
@@ -212,7 +213,10 @@ static esp_err_t root_assets_handler(httpd_req_t *req){
 
 static esp_err_t direction_handler(httpd_req_t *req){
     int angle;
-    char *content = malloc(req->content_len*sizeof(char*));
+    int len = req->content_len*sizeof(char*)+1;
+
+    char *content = malloc(len);
+    memset(content, 0x00, len);
     httpd_req_recv(req, content, req->content_len);
     ESP_LOGI(TAG, "received: %s", content);
     cJSON *direction = cJSON_Parse(content);
@@ -345,8 +349,8 @@ void peripherical_init(){
     servo_config_t servo_cfg = {
         .max_angle = 180,
         .min_width_us = 500,
-        .max_width_us = 2500,
-        .freq = 180,
+        .max_width_us = 1500,
+        .freq = 50,
         .timer_number = LEDC_TIMER_0,
         .channels = {
             .servo_pin = {
@@ -464,5 +468,4 @@ void app_main() {
     }
     
 
-    iot_servo_deinit(LEDC_LOW_SPEED_MODE);
 }
