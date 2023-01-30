@@ -1,13 +1,14 @@
 var speed = 0;
 var dir = 0;
 var up = 0;
+var MAX_STEP = 50;
 
 $("#direita").mousedown(function () {
     up = setInterval(function () {
-        if (dir < 70)
-            dir += 1;
+        dir = 1;
         direction_send();
-    }, 150);
+        clearInterval(up);
+    }, 120);
 });
 
 $("#direita").mouseup(function () {
@@ -16,10 +17,10 @@ $("#direita").mouseup(function () {
 
 $("#esquerda").mousedown(function () {
     up = setInterval(function () {
-        if (dir > 0)
-            dir -= 1;
+        dir = -1;
         direction_send();
-    }, 150);
+        clearInterval(up);
+    }, 120);
 });
 
 $("#esquerda").mouseup(function () {
@@ -32,9 +33,11 @@ function direction_send() {
         type: "POST",
         url: "/direction",
         data: JSON.stringify(direction),
-        success: function (result) { },
+        success: function (result) { 
+        },
         error: function (result) {
             alert('error');
         }
+        
     });
 }

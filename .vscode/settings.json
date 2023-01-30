@@ -18,6 +18,8 @@
         "string_view": "c",
         "i2c.h": "c",
         "stdlib.h": "c",
-        "param.h": "c"
+        "param.h": "c",
+        "chrono": "c",
+        "complex": "c"
     }
 }

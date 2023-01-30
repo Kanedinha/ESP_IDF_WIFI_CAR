@@ -26,6 +26,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include "freertos/timers.h"
 #include "cJSON.h"
 
 #include "nvs_flash.h"
@@ -33,13 +34,18 @@
 #include "lwip/sys.h"
 
 #define SERVO_CH0_PIN 0
+#define MOTOR_DIR 4
+#define MOTOR_EN 16
+#define MOTOR_PULSE 19
+#define DEGREE_PER_STEP 0.45
+#define MAX_STEP 100
 
-#define EXAMPLE_ESP_WIFI_SSID      "Projetos"
-#define EXAMPLE_ESP_WIFI_PASS      "ftn22182"
-#define EXAMPLE_ESP_MAXIMUM_RETRY  10
+#define EXAMPLE_ESP_WIFI_SSID "Projetos"
+#define EXAMPLE_ESP_WIFI_PASS "ftn22182"
+#define EXAMPLE_ESP_MAXIMUM_RETRY 10
 
 #define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT      BIT1
+#define WIFI_FAIL_BIT BIT1
 
 #define I2C_MASTER_FREQ_HZ 40000
 #define I2C_MASTER_SDA_IO 21
@@ -56,9 +62,10 @@
 // #define NACK_VAL 0x1                /*!< I2C nack value */
 
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + CONFIG_SPIFFS_OBJ_NAME_LEN)
-#define SCRATCH_BUFSIZE  8192
+#define SCRATCH_BUFSIZE 8192
 
-struct file_server_data {
+struct file_server_data
+{
     char base_path[ESP_VFS_PATH_MAX + 1];
     char scratch[SCRATCH_BUFSIZE];
 };
@@ -67,10 +74,9 @@ static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
 static const char *TAG = "wifi station";
 static ledc_channel_config_t ledc_channel;
-static const adc1_channel_t adc_channel = ADC_CHANNEL_4;
 
-float angle = 0;
-int8_t speed = 0; //velocidade varia de -100% até 100%
+int8_t step_position = 0;
+int8_t speed = 0; // velocidade varia de -100% até 100%
 
 #define IS_FILE_EXT(filename, ext) \
     (strcasecmp(&filename[strlen(filename) - sizeof(ext) + 1], ext) == 0)
@@ -123,27 +129,42 @@ static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filena
     return httpd_resp_set_type(req, "text/plain");
 }
 
-void set_direction(float angle){
-    ESP_LOGI(TAG, "angle: %.2f", angle);        
-    ledc_set_duty(ledc_channel.speed_mode, ledc_channel.channel, adc_val);
+void set_direction(int8_t step)
+{
+    if (step == 1)
+        gpio_set_level(MOTOR_DIR, 1);
+    else if (step == -1)
+        gpio_set_level(MOTOR_DIR, 0);
+    else
+        return;
 
+    ESP_LOGI(TAG, "angle: %.2f", step_position * DEGREE_PER_STEP);
+    gpio_set_level(MOTOR_PULSE, 1);
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+    gpio_set_level(MOTOR_PULSE, 0);
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+
+    step_position += step;
 }
 
-static const char* get_path_from_uri(char *dest, const char *base_path, const char *uri, size_t destsize)
+static const char *get_path_from_uri(char *dest, const char *base_path, const char *uri, size_t destsize)
 {
     const size_t base_pathlen = strlen(base_path);
     size_t pathlen = strlen(uri);
 
     const char *quest = strchr(uri, '?');
-    if (quest) {
+    if (quest)
+    {
         pathlen = MIN(pathlen, quest - uri);
     }
     const char *hash = strchr(uri, '#');
-    if (hash) {
+    if (hash)
+    {
         pathlen = MIN(pathlen, hash - uri);
     }
 
-    if (base_pathlen + pathlen + 1 > destsize) {
+    if (base_pathlen + pathlen + 1 > destsize)
+    {
         /* Full path string won't fit into destination buffer */
         return NULL;
     }
@@ -156,98 +177,121 @@ static const char* get_path_from_uri(char *dest, const char *base_path, const ch
     return dest + base_pathlen;
 }
 
-static esp_err_t root_handler(httpd_req_t *req){
+static esp_err_t root_handler(httpd_req_t *req)
+{
 
     extern const uint8_t index_html_start[] asm("_binary_page_html_start"); // uint8_t
     extern const uint8_t index_html_end[] asm("_binary_page_html_end");     // uint8_t
 
     httpd_resp_set_type(req, "page.html");
     httpd_resp_send(req, (char *)index_html_start, index_html_end - index_html_start - 1);
-    
+
     return ESP_OK;
 }
 
-static esp_err_t root_assets_handler(httpd_req_t *req){
-    
-    if(strcasecmp((char*)req->uri, "/assets/Fortron.png") == 0){
+static esp_err_t root_assets_handler(httpd_req_t *req)
+{
+    if (strcasecmp((char *)req->uri, "/assets/Fortron.png") == 0)
+    {
         extern const uint8_t Fortron_start[] asm("_binary_Fortron_png_start"); // uint8_t
         extern const uint8_t Fortron_end[] asm("_binary_Fortron_png_end");     // uint8_t
-        set_content_type_from_file(req, (char*)req->uri);
+        set_content_type_from_file(req, (char *)req->uri);
         httpd_resp_send(req, (char *)Fortron_start, Fortron_end - Fortron_start - 1);
-        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char*)req->uri);
+        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
     }
-    else if(strcasecmp((char*)req->uri, "/assets/trator.gif") == 0){
+    else if (strcasecmp((char *)req->uri, "/assets/trator.gif") == 0)
+    {
         extern const uint8_t trator_start[] asm("_binary_trator_gif_start"); // uint8_t
         extern const uint8_t trator_end[] asm("_binary_trator_gif_end");     // uint8_t
-        set_content_type_from_file(req, (char*)req->uri);
+        set_content_type_from_file(req, (char *)req->uri);
         httpd_resp_send(req, (char *)trator_start, trator_end - trator_start - 1);
-        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char*)req->uri);
-    } 
-    else if(strcasecmp((char*)req->uri, "/assets/style.css") == 0){
+        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
+    }
+    else if (strcasecmp((char *)req->uri, "/assets/style.css") == 0)
+    {
         extern const uint8_t style_start[] asm("_binary_style_css_start"); // uint8_t
         extern const uint8_t style_end[] asm("_binary_style_css_end");     // uint8_t
-        set_content_type_from_file(req, (char*)req->uri);
+        set_content_type_from_file(req, (char *)req->uri);
         httpd_resp_send(req, (char *)style_start, style_end - style_start - 1);
-        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char*)req->uri);
+        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
     }
-    else if(strcasecmp((char*)req->uri, "/assets/code.js") == 0){
+    else if (strcasecmp((char *)req->uri, "/assets/code.js") == 0)
+    {
         extern const uint8_t code_start[] asm("_binary_code_js_start"); // uint8_t
         extern const uint8_t code_end[] asm("_binary_code_js_end");     // uint8_t
-        set_content_type_from_file(req, (char*)req->uri);
+        set_content_type_from_file(req, (char *)req->uri);
         httpd_resp_send(req, (char *)code_start, code_end - code_start - 1);
-        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char*)req->uri);
+        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
     }
-    else if(strcasecmp((char*)req->uri, "/assets/F.ico") == 0){
+    else if (strcasecmp((char *)req->uri, "/assets/F.ico") == 0)
+    {
         extern const uint8_t F_start[] asm("_binary_F_ico_start"); // uint8_t
         extern const uint8_t F_end[] asm("_binary_F_ico_end");     // uint8_t
-        set_content_type_from_file(req, (char*)req->uri);
+        set_content_type_from_file(req, (char *)req->uri);
         httpd_resp_send(req, (char *)F_start, F_end - F_start - 1);
-        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char*)req->uri);
+        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
     }
-    else if(strcasecmp((char*)req->uri, "/assets/jquery-3.6.3.min.js") == 0){
+    else if (strcasecmp((char *)req->uri, "/assets/jquery-3.6.3.min.js") == 0)
+    {
         extern const uint8_t jquery_start[] asm("_binary_jquery_3_6_3_min_js_start"); // uint8_t
         extern const uint8_t jquery_end[] asm("_binary_jquery_3_6_3_min_js_end");     // uint8_t
-        set_content_type_from_file(req, (char*)req->uri);
+        set_content_type_from_file(req, (char *)req->uri);
         httpd_resp_send(req, (char *)jquery_start, jquery_end - jquery_start - 1);
-        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char*)req->uri);
+        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
     }
     return ESP_OK;
 }
 
-static esp_err_t direction_handler(httpd_req_t *req){
-    int angle;
-    int len = req->content_len*sizeof(char*)+1;
+static esp_err_t direction_handler(httpd_req_t *req)
+{
+    int8_t step;
+    uint8_t len = req->content_len * sizeof(char *) + 1;
 
     char *content = malloc(len);
     memset(content, 0x00, len);
+
     httpd_req_recv(req, content, req->content_len);
     ESP_LOGI(TAG, "received: %s", content);
-    cJSON *direction = cJSON_Parse(content);
-    char *json = NULL;
-    json = cJSON_Print(direction);
-    ESP_LOGI(TAG, "parsed: %s", json);
-    angle = cJSON_GetObjectItem(direction,"X")->valueint;
 
-    set_direction((float)angle);
-    httpd_resp_send_chunk(req, NULL, 0);
+    cJSON *direction = cJSON_Parse(content);
+
+    step = cJSON_GetObjectItem(direction, "X")->valueint;
+    ESP_LOGI(TAG, "step: %d", step);
+    if((step_position + step) > -1 && (step_position + step) < MAX_STEP + 1)
+        set_direction(step);
+
+    cJSON *resp = NULL;
+    cJSON_AddItemToObject(resp, step_position, cJSON_GetObjectItem(direction, "X"));
+    httpd_resp_send(req, NULL, 0); // como envia sa porra?
+
     cJSON_Delete(direction);
+    cJSON_Delete(resp);
     return ESP_OK;
 }
 
-static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data){
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+{
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
+    {
         esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num < EXAMPLE_ESP_MAXIMUM_RETRY) {
+    }
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
+    {
+        if (s_retry_num < EXAMPLE_ESP_MAXIMUM_RETRY)
+        {
             esp_wifi_connect();
             s_retry_num++;
             ESP_LOGI(TAG, "retry to connect to the AP");
-        } else {
+        }
+        else
+        {
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
-        ESP_LOGI(TAG,"connect to the AP fail");
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI(TAG, "connect to the AP fail");
+    }
+    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
+    {
+        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
@@ -255,33 +299,31 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
 }
 
 httpd_uri_t direction_uri = {
-    .uri      = "/direction",
-    .method   = HTTP_POST,
-    .handler  = direction_handler,
-    .user_ctx = NULL
-};
+    .uri = "/direction",
+    .method = HTTP_POST,
+    .handler = direction_handler,
+    .user_ctx = NULL};
 
 httpd_uri_t root_uri = {
-    .uri      = "/",
-    .method   = HTTP_GET,
-    .handler  = root_handler,
-    .user_ctx = NULL
-};
+    .uri = "/",
+    .method = HTTP_GET,
+    .handler = root_handler,
+    .user_ctx = NULL};
 
 httpd_uri_t root_assets_uri = {
-    .uri      = "/assets/*",
-    .method   = HTTP_GET,
-    .handler  = root_assets_handler,
-    .user_ctx = NULL
-};
+    .uri = "/assets/*",
+    .method = HTTP_GET,
+    .handler = root_assets_handler,
+    .user_ctx = NULL};
 
-esp_err_t wifi_init(void){
+esp_err_t wifi_init(void)
+{
     s_wifi_event_group = xEventGroupCreate();
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
-    
+
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
@@ -295,52 +337,60 @@ esp_err_t wifi_init(void){
         .sta = {
             .ssid = EXAMPLE_ESP_WIFI_SSID,
             .password = EXAMPLE_ESP_WIFI_PASS,
-	     .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
         },
     };
 
-    if (strlen(EXAMPLE_ESP_WIFI_PASS) == 0) {
+    if (strlen(EXAMPLE_ESP_WIFI_PASS) == 0)
+    {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
-    ESP_ERROR_CHECK(esp_wifi_start() );
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
 
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
-            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
-            pdFALSE,
-            pdFALSE,
-            portMAX_DELAY);
+                                           WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+                                           pdFALSE,
+                                           pdFALSE,
+                                           portMAX_DELAY);
 
-    if (bits & WIFI_CONNECTED_BIT) {
+    if (bits & WIFI_CONNECTED_BIT)
+    {
         ESP_LOGI(TAG, "connected to ap SSID:%s password:%s",
                  EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
-    } else if (bits & WIFI_FAIL_BIT) {
+    }
+    else if (bits & WIFI_FAIL_BIT)
+    {
         ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s",
                  EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
 
     ESP_ERROR_CHECK(esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, instance_got_ip));
     ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, instance_any_id));
     vEventGroupDelete(s_wifi_event_group);
-    
+
     return ESP_OK;
 }
 
-esp_err_t web_server(){
+esp_err_t web_server()
+{
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
 
     httpd_handle_t server = NULL;
-    if (httpd_start(&server, &config) != ESP_OK) {
-        ESP_LOGI(TAG, "WEB Server failed !!!\n"); 
+    if (httpd_start(&server, &config) != ESP_OK)
+    {
+        ESP_LOGI(TAG, "WEB Server failed !!!\n");
         return ESP_FAIL;
-    }    
-    ESP_LOGI(TAG, "WEB Server initialized sus !!!\n"); 
+    }
+    ESP_LOGI(TAG, "WEB Server initialized sus !!!\n");
 
     httpd_register_uri_handler(server, &root_assets_uri);
     httpd_register_uri_handler(server, &direction_uri);
@@ -348,43 +398,39 @@ esp_err_t web_server(){
     return ESP_OK;
 }
 
-void peripherical_init(){
+void peripherical_init()
+{
     ledc_timer_config_t ledc_timer = {
         .duty_resolution = LEDC_TIMER_10_BIT,
-        .freq_hz = 1000,
+        .freq_hz = 50,
         .speed_mode = LEDC_HIGH_SPEED_MODE,
         .timer_num = LEDC_TIMER_0,
         .clk_cfg = LEDC_AUTO_CLK,
     };
 
-    ledc_timer_config(&ledc_timer);
+    if (ledc_timer_config(&ledc_timer) != ESP_OK)
+        ESP_LOGI(TAG, "Timer ERROR !!!");
+    ESP_LOGI(TAG, "Timer init OK!");
+
     ledc_channel.channel = LEDC_CHANNEL_0;
     ledc_channel.duty = 0;
-    ledc_channel.gpio_num = 0;
-    ledc_channel.speed_mode = LEDC_HIGH_SPEED_MODE;
+    ledc_channel.gpio_num = 2;
+    ledc_channel.speed_mode = LEDC_LOW_SPEED_MODE;
     ledc_channel.hpoint = 0;
     ledc_channel.timer_sel = LEDC_TIMER_0;
-    ledc_channel_config(&ledc_channel);
-    
-    // servo_config_t servo_cfg = {
-    //     .max_angle = 180,
-    //     .min_width_us = 500,
-    //     .max_width_us = 1500,
-    //     .freq = 50,
-    //     .timer_number = LEDC_TIMER_0,
-    //     .channels = {
-    //         .servo_pin = {
-    //             SERVO_CH0_PIN,
-    //         },
-    //         .ch = {
-    //             LEDC_CHANNEL_0,
-    //         },
-    //     },
-    //     .channel_number = 1,
-    // };
 
-    // iot_servo_init(LEDC_LOW_SPEED_MODE, &servo_cfg);
-    set_direction(0);
+    if (ledc_channel_config(&ledc_channel) != ESP_OK)
+        ESP_LOGI(TAG, "PWM ERROR !!!");
+    ESP_LOGI(TAG, "PWM init OK!");
+
+    gpio_set_direction(MOTOR_PULSE, GPIO_MODE_OUTPUT);
+    gpio_set_direction(MOTOR_DIR, GPIO_MODE_OUTPUT);
+    gpio_set_direction(MOTOR_EN, GPIO_MODE_OUTPUT);
+
+    gpio_set_level(MOTOR_EN, 1);
+    gpio_set_level(MOTOR_PULSE, 0);
+    gpio_set_level(MOTOR_DIR, 0);
+    step_position = MAX_STEP/2;
 
     // ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
     // i2c_config_t conf = {
@@ -397,8 +443,6 @@ void peripherical_init(){
     //     .clk_flags = 0,                          // you can use I2C_SCLK_SRC_FLAG_* flags to choose i2c source clock here
     // };
     // i2c_param_config(I2C_NUM_0, &conf);
-  
-
 }
 
 // void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt)
@@ -416,7 +460,7 @@ void peripherical_init(){
 // 	i2c_master_stop(cmd);
 
 // 	espRc = i2c_master_cmd_begin(I2C_NUM_0, cmd, 10 / portTICK_PERIOD_MS);
-	
+
 // 	i2c_cmd_link_delete(cmd);
 // }
 
@@ -443,36 +487,40 @@ void peripherical_init(){
 // 	        return iError;
 // }
 
-void app_main() {
+void app_main()
+{
     esp_err_t ret;
     // uint8_t rx_data[5];
     // int8_t i2cRet;
     // uint8_t *press = malloc(2*sizeof(uint8_t));
     // uint8_t *temp = malloc(2*sizeof(uint8_t));
-    
+
     peripherical_init();
 
     ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-      ESP_ERROR_CHECK(nvs_flash_erase());
-      ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
 
     ret = wifi_init();
-    if(ret != ESP_OK){
-        ESP_LOGI(TAG, "Wifi init ERROR !!!\n");    
+    if (ret != ESP_OK)
+    {
+        ESP_LOGI(TAG, "Wifi init ERROR !!!\n");
     }
     ESP_LOGI(TAG, "ESP_WIFI_INIT\n");
     ESP_ERROR_CHECK(ret);
-    
+
     ret = web_server();
-    if(ret != ESP_OK){
-        ESP_LOGI(TAG, "web server ERROR !!!\n");    
+    if (ret != ESP_OK)
+    {
+        ESP_LOGI(TAG, "web server ERROR !!!\n");
     }
     ESP_LOGI(TAG, "DALE\n");
     ESP_ERROR_CHECK(ret);
-    
+
     // i2c_write(BMP280_ADDR, 0xF4, (uint8_t*)0x27, 1);
     // while(1){
     //     vTaskDelay(200);
@@ -484,8 +532,6 @@ void app_main() {
     // }
     while (1)
     {
-        vTaskDelay(1000);
+        vTaskDelay(500);
     }
-    
-
 }
