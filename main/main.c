@@ -66,6 +66,8 @@ struct file_server_data {
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
 static const char *TAG = "wifi station";
+static ledc_channel_config_t ledc_channel;
+static const adc1_channel_t adc_channel = ADC_CHANNEL_4;
 
 float angle = 0;
 int8_t speed = 0; //velocidade varia de -100% até 100%
@@ -122,8 +124,9 @@ static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filena
 }
 
 void set_direction(float angle){
-    ESP_LOGI(TAG, "angle: %.2f", angle);
-    iot_servo_write_angle(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, (float)angle);
+    ESP_LOGI(TAG, "angle: %.2f", angle);        
+    ledc_set_duty(ledc_channel.speed_mode, ledc_channel.channel, adc_val);
+
 }
 
 static const char* get_path_from_uri(char *dest, const char *base_path, const char *uri, size_t destsize)
@@ -346,24 +349,41 @@ esp_err_t web_server(){
 }
 
 void peripherical_init(){
-    servo_config_t servo_cfg = {
-        .max_angle = 180,
-        .min_width_us = 500,
-        .max_width_us = 1500,
-        .freq = 50,
-        .timer_number = LEDC_TIMER_0,
-        .channels = {
-            .servo_pin = {
-                SERVO_CH0_PIN,
-            },
-            .ch = {
-                LEDC_CHANNEL_0,
-            },
-        },
-        .channel_number = 1,
+    ledc_timer_config_t ledc_timer = {
+        .duty_resolution = LEDC_TIMER_10_BIT,
+        .freq_hz = 1000,
+        .speed_mode = LEDC_HIGH_SPEED_MODE,
+        .timer_num = LEDC_TIMER_0,
+        .clk_cfg = LEDC_AUTO_CLK,
     };
 
-    iot_servo_init(LEDC_LOW_SPEED_MODE, &servo_cfg);
+    ledc_timer_config(&ledc_timer);
+    ledc_channel.channel = LEDC_CHANNEL_0;
+    ledc_channel.duty = 0;
+    ledc_channel.gpio_num = 0;
+    ledc_channel.speed_mode = LEDC_HIGH_SPEED_MODE;
+    ledc_channel.hpoint = 0;
+    ledc_channel.timer_sel = LEDC_TIMER_0;
+    ledc_channel_config(&ledc_channel);
+    
+    // servo_config_t servo_cfg = {
+    //     .max_angle = 180,
+    //     .min_width_us = 500,
+    //     .max_width_us = 1500,
+    //     .freq = 50,
+    //     .timer_number = LEDC_TIMER_0,
+    //     .channels = {
+    //         .servo_pin = {
+    //             SERVO_CH0_PIN,
+    //         },
+    //         .ch = {
+    //             LEDC_CHANNEL_0,
+    //         },
+    //     },
+    //     .channel_number = 1,
+    // };
+
+    // iot_servo_init(LEDC_LOW_SPEED_MODE, &servo_cfg);
     set_direction(0);
 
     // ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
