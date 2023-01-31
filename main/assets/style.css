@@ -12,28 +12,8 @@ body{
     vertical-align: middle;
 }
 
-.Battery{
+.sensor{
     width: 300px;
-    height: 10px;
-    margin: auto;
-    background-color: black;
-    text-align: left;
-    display: flex;
-    flex-wrap: nowrap;
-}
-
-.Speed{
-    width: 200px;
-    height: 10px;
-    margin: auto;
-    background-color: black;
-    text-align: left;
-    display: flex;
-    flex-wrap: nowrap;
-}
-
-.Temperature{
-    width: 200px;
     height: 10px;
     margin: auto;
     background-color: black;

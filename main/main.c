@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 
+#include <rom/ets_sys.h>
 #include <esp_types.h>
 #include <esp_rom_gpio.h>
 #include "esp_chip_info.h"
@@ -18,6 +19,7 @@
 #include "esp_vfs.h"
 #include "esp_spiffs.h"
 #include "esp_http_server.h"
+#include <ff.h>
 
 #include "driver/i2c.h"
 #include "driver/ledc.h"
@@ -33,12 +35,25 @@
 #include "lwip/err.h"
 #include "lwip/sys.h"
 
-#define SERVO_CH0_PIN 0
+// ************ DEFINE WHAT MOTOR WILL USE **********************//
+
+// #define STEPPER_DRIVER
+// #define STEP_ULN2003
+// #define SERVO_MOTOR
+
+//***************************************************************//
+
+#define SERVO_CH0_PIN 4
 #define MOTOR_DIR 4
 #define MOTOR_EN 16
 #define MOTOR_PULSE 19
-#define DEGREE_PER_STEP 0.45
-#define MAX_STEP 100
+#define DEGREE_PER_STEP 7.2
+#define MICROSTEP 1
+#define MAX_STEP 50
+#define COIL1 32
+#define COIL2 33
+#define COIL3 25
+#define COIL4 26
 
 #define EXAMPLE_ESP_WIFI_SSID "Projetos"
 #define EXAMPLE_ESP_WIFI_PASS "ftn22182"
@@ -75,7 +90,9 @@ static int s_retry_num = 0;
 static const char *TAG = "wifi station";
 static ledc_channel_config_t ledc_channel;
 
-int8_t step_position = 0;
+int8_t pos_count = 0;
+
+int16_t step_position = 0;
 int8_t speed = 0; // velocidade varia de -100% até 100%
 
 #define IS_FILE_EXT(filename, ext) \
@@ -131,20 +148,68 @@ static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filena
 
 void set_direction(int8_t step)
 {
-    if (step == 1)
-        gpio_set_level(MOTOR_DIR, 1);
-    else if (step == -1)
-        gpio_set_level(MOTOR_DIR, 0);
+    // static int pos_count = 0;
+    // #ifdef STEPPER_DRIVER
+    //     if (step == 1)
+    //         gpio_set_level(MOTOR_DIR, 1);
+    //     else if (step == -1)
+    //         gpio_set_level(MOTOR_DIR, 0);
+    //     else
+    //         return;
+
+    //     vTaskDelay(50 / portTICK_PERIOD_MS);
+    //     ESP_LOGI(TAG, "angle: %.2f", step_position * DEGREE_PER_STEP / MICROSTEP);
+    //     gpio_set_level(MOTOR_PULSE, 1);
+    //     vTaskDelay(200 / portTICK_PERIOD_MS);
+    //     gpio_set_level(MOTOR_PULSE, 0);
+    //     vTaskDelay(200 / portTICK_PERIOD_MS);
+    //     step_position += step;
+    //     // #elif SERVO_MOTOR
+
+    // se step - pos count--
+    //  * Step C0 C1 C2 C3
+    //  *    1  1  0  1  0
+    //  *    2  0  1  1  0
+    //  *    3  0  1  0  1
+    //  *    4  1  0  0  1
+    if (pos_count + step >= 0)
+        pos_count += step;
     else
-        return;
+        pos_count = 3;
+    switch (pos_count % 4)
+    {
+    case 0:
+        gpio_set_level(COIL1, 1);
+        gpio_set_level(COIL2, 0);
+        gpio_set_level(COIL3, 1);
+        gpio_set_level(COIL4, 0);
+        break;
+    case 1:
+        gpio_set_level(COIL1, 0);
+        gpio_set_level(COIL2, 1);
+        gpio_set_level(COIL3, 1);
+        gpio_set_level(COIL4, 0);
+        break;
+    case 2:
+        gpio_set_level(COIL1, 0);
+        gpio_set_level(COIL2, 1);
+        gpio_set_level(COIL3, 0);
+        gpio_set_level(COIL4, 1);
+        break;
+    case 3:
+    default:
+        gpio_set_level(COIL1, 1);
+        gpio_set_level(COIL2, 0);
+        gpio_set_level(COIL3, 0);
+        gpio_set_level(COIL4, 1);
+        break;
 
-    ESP_LOGI(TAG, "angle: %.2f", step_position * DEGREE_PER_STEP);
-    gpio_set_level(MOTOR_PULSE, 1);
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-    gpio_set_level(MOTOR_PULSE, 0);
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-
-    step_position += step;
+        // gpio_set_level(COIL1, 0);
+        // gpio_set_level(COIL2, 0);
+        // gpio_set_level(COIL3, 0);
+        // gpio_set_level(COIL4, 0);
+        // break;
+    }
 }
 
 static const char *get_path_from_uri(char *dest, const char *base_path, const char *uri, size_t destsize)
@@ -179,7 +244,6 @@ static const char *get_path_from_uri(char *dest, const char *base_path, const ch
 
 static esp_err_t root_handler(httpd_req_t *req)
 {
-
     extern const uint8_t index_html_start[] asm("_binary_page_html_start"); // uint8_t
     extern const uint8_t index_html_end[] asm("_binary_page_html_end");     // uint8_t
 
@@ -245,27 +309,49 @@ static esp_err_t root_assets_handler(httpd_req_t *req)
 static esp_err_t direction_handler(httpd_req_t *req)
 {
     int8_t step;
+    // tamanho do conteúdo recebido pelo POST
     uint8_t len = req->content_len * sizeof(char *) + 1;
 
+    // Alocação dinâmica do conteúdo recebido da requisição POST
+    // LEMBRAR DE LIBERAR A MEMÓRIA FREE(VAR) !!!!!!!!
     char *content = malloc(len);
     memset(content, 0x00, len);
 
+    // Recebe o conteúdo
     httpd_req_recv(req, content, req->content_len);
     ESP_LOGI(TAG, "received: %s", content);
 
+    // Reconstrói o JSON
     cJSON *direction = cJSON_Parse(content);
 
-    step = cJSON_GetObjectItem(direction, "X")->valueint;
+    // step recebe apenas o valor do objeto x, como int
+    step = cJSON_GetObjectItem(direction, "x")->valueint;
     ESP_LOGI(TAG, "step: %d", step);
-    if((step_position + step) > -1 && (step_position + step) < MAX_STEP + 1)
-        set_direction(step);
 
-    cJSON *resp = NULL;
-    cJSON_AddItemToObject(resp, step_position, cJSON_GetObjectItem(direction, "X"));
-    httpd_resp_send(req, NULL, 0); // como envia sa porra?
+    // lógica para cada step, não pode passar de 0 à 360 (mas pode ser 0 ou 360)
+    // if ((step_position + step) >= 0 && (step_position + step) <= MAX_STEP * MICROSTEP)
+    // {
+    set_direction(step);
+    // }
 
+    // Cria objeto JSON para enviar como resposta
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddNumberToObject(resp, "x", (float)step_position * DEGREE_PER_STEP / MICROSTEP);
+
+    // alocação do buffer
+    // LEMBRAR DE LIBERAR A MEMÓRIA FREE(VAR) !!!!!!!
+    char *buff = malloc(sizeof(resp) + 1);
+    memset(buff, 0x00, sizeof(resp) + 1);
+
+    // passa todo o JSON como string
+    buff = cJSON_Print(resp);
+
+    // envia essa lindeza finalmente
+    httpd_resp_send(req, buff, strlen(buff));
     cJSON_Delete(direction);
     cJSON_Delete(resp);
+    free(content);
+    free(buff);
     return ESP_OK;
 }
 
@@ -423,14 +509,28 @@ void peripherical_init()
         ESP_LOGI(TAG, "PWM ERROR !!!");
     ESP_LOGI(TAG, "PWM init OK!");
 
-    gpio_set_direction(MOTOR_PULSE, GPIO_MODE_OUTPUT);
-    gpio_set_direction(MOTOR_DIR, GPIO_MODE_OUTPUT);
-    gpio_set_direction(MOTOR_EN, GPIO_MODE_OUTPUT);
+    // #ifdef STEPPER_DRIVER
+    //     gpio_set_direction(MOTOR_PULSE, GPIO_MODE_OUTPUT);
+    //     gpio_set_direction(MOTOR_DIR, GPIO_MODE_OUTPUT);
+    //     gpio_set_direction(MOTOR_EN, GPIO_MODE_OUTPUT);
 
-    gpio_set_level(MOTOR_EN, 1);
-    gpio_set_level(MOTOR_PULSE, 0);
-    gpio_set_level(MOTOR_DIR, 0);
-    step_position = MAX_STEP/2;
+    //     gpio_set_level(MOTOR_EN, 1);
+    //     gpio_set_level(MOTOR_PULSE, 0);
+    //     gpio_set_level(MOTOR_DIR, 0);
+
+    //     step_position = MAX_STEP * MICROSTEP / 2;
+    // #elif SERVO_MOTOR
+    // #elif STEP_ULN2003
+    gpio_set_direction(COIL1, GPIO_MODE_OUTPUT);
+    gpio_set_direction(COIL2, GPIO_MODE_OUTPUT);
+    gpio_set_direction(COIL3, GPIO_MODE_OUTPUT);
+    gpio_set_direction(COIL4, GPIO_MODE_OUTPUT);
+
+    gpio_set_level(COIL1, 0);
+    gpio_set_level(COIL2, 0);
+    gpio_set_level(COIL3, 0);
+    gpio_set_level(COIL4, 0);
+    // #endif
 
     // ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
     // i2c_config_t conf = {

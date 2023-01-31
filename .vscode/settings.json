@@ -20,6 +20,11 @@
         "stdlib.h": "c",
         "param.h": "c",
         "chrono": "c",
-        "complex": "c"
+        "complex": "c",
+        "ff.h": "c",
+        "diskio.h": "c",
+        "float.h": "c",
+        "ledc.h": "c"
     }
 }
+ 

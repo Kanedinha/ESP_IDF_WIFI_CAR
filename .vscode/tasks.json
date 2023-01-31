@@ -17,7 +17,7 @@
                 "env": {
                     "PATH": "${env:PATH}:${config:idf.customExtraPaths}"
                 }
-            },
+            }, 
             "problemMatcher": [
                 {
                     "owner": "cpp",
