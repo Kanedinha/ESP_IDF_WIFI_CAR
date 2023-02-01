@@ -1,59 +1,91 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <meta charset="utf-8">
-        <title>Kaneda</title>
-        <link rel="icon" type="image/x-icon" href="assets/F.ico">
-        <link rel="stylesheet" href="assets/style.css">
-        <script type="application/javascript" src="assets/jquery-3.6.3.min.js"></script>
-    </head>
 
-    <body>
-        <header>
-            <div class="top">
-                <img type="image/gif" src="assets/trator.gif" alt="Vrum Vrum" id="truck">
-                <img type="image/png" src="assets/Fortron.png" alt="Fortron" id="logo"> 
-                <img type="image/gif" src="assets/trator.gif" alt="Vrum Vrum" id="truck">
-            </div>    
-        </header>
-         
-        <div class="flex-container">
-            <div class="Xdir">
-                <button class="btn" id="esquerda">
+<head>
+    <meta charset="utf-8">
+    <title>Kaneda</title>
+    <link rel="icon" type="image/x-icon" href="assets/F.ico">
+    <link rel="stylesheet" href="assets/style.css">
+    <script type="application/javascript" src="assets/jquery-3.6.3.min.js"></script>
+</head>
+
+<body>
+    <header>
+        <div class="top">
+            <img type="image/gif" src="assets/trator.gif" alt="Vrum Vrum" id="truck">
+            <img type="image/png" src="assets/Fortron.png" alt="Fortron" id="logo">
+            <img type="image/gif" src="assets/trator.gif" alt="Vrum Vrum" id="truck">
+        </div>
+    </header>
+
+    <div class="flex-container">
+        <div class="Xdir">
+            <div class="steps">
+                <button class="btn" id="esquerda1">
                     ⇠
                 </button>
-                <button class="btn" id="direita">
+                <p class="text">1</p>
+                <button class="btn" id="direita1">
                     ⇢
                 </button>
             </div>
-            <div class="CAM">
-                <p class="text">CAM</p>
-            </div>
-            <div class="Ydir">
-                <button class="btn" id="cima">
-                    ⇡
+            <div class="steps">
+                <button class="btn" id="esquerda10">
+                    ⇠
                 </button>
-                <button class="btn" id="baixo">
-                    ⇣
+                <p class="text">10</p>
+                <button class="btn" id="direita10">
+                    ⇢
+                </button>
+            </div>
+            <div class="steps">
+                <button class="btn" id="esquerda100">
+                    ⇠
+                </button>
+                <p class="text">100</p>
+                <button class="btn" id="direita100">
+                    ⇢
+                </button>
+            </div>
+            <div class="steps">
+                <button class="btn" id="esquerdaFull">
+                    ⇠
+                </button>
+                <p class="text">Full</p>
+                <button class="btn" id="direitaFull">
+                    ⇢
                 </button>
             </div>
         </div>
+        <div class="CAM">
+            <p class="text">CAM</p>
+        </div>
+        <div class="Ydir">
+            <button class="btn" id="cima">
+                ⇡
+            </button>
+            <button class="btn" id="baixo">
+                ⇣
+            </button>
+        </div>
+    </div>
 
-        <div class="info-container">
-            <div class="sensor" id="battery">
-                <p class="text">Battery: loading...  ┤█ █ █ █│</p>
-            </div>
-            <div class="sensor" id="Angle">
-                <p class="text">Angle: loading...</p>
-            </div>
-            <div class="sensor" id="speed">
-                <p class="text">Speed: loading... Km/h</p>
-            </div>
-            <div class="sensor" id="temperature">
-                <p class="text">Temperature: loading... ºC</p>
-            </div>
+    <div class="info-container">
+        <div class="sensor" id="battery">
+            <p class="text">Battery: loading... ┤█ █ █ █│</p>
         </div>
-        
-        <script type="application/javascript" src="assets/code.js"></script>
-    </body>
+        <div class="sensor" id="Angle">
+            <p class="text">Angle: loading...</p>
+        </div>
+        <div class="sensor" id="speed">
+            <p class="text">Speed: loading... Km/h</p>
+        </div>
+        <div class="sensor" id="temperature">
+            <p class="text">Temperature: loading... ºC</p>
+        </div>
+    </div>
+
+    <script type="application/javascript" src="assets/code.js"></script>
+</body>
+
 </html>

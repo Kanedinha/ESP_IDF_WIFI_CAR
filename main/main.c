@@ -43,13 +43,9 @@
 
 //***************************************************************//
 
-#define SERVO_CH0_PIN 4
-#define MOTOR_DIR 4
-#define MOTOR_EN 16
-#define MOTOR_PULSE 19
-#define DEGREE_PER_STEP 7.2
 #define MICROSTEP 1
-#define MAX_STEP 50
+#define MAX_STEP 4075
+#define DEGREE_PER_STEP 360 / MAX_STEP
 #define COIL1 32
 #define COIL2 33
 #define COIL3 25
@@ -65,19 +61,24 @@
 #define I2C_MASTER_FREQ_HZ 40000
 #define I2C_MASTER_SDA_IO 21
 #define I2C_MASTER_SCL_IO 22
+#define AS5600 0x36
+#define REG12 0X0C
+#define REG13 0X0D
 // #define BMP280_ADDR 0x76
 
-// #define I2C_MASTER_TX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
-// #define I2C_MASTER_RX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
-// #define WRITE_BIT I2C_MASTER_WRITE  /*!< I2C master write */
-// #define READ_BIT I2C_MASTER_READ    /*!< I2C master read */
-// #define ACK_CHECK_EN 0x1            /*!< I2C master will check ack from slave*/
-// #define ACK_CHECK_DIS 0x0           /*!< I2C master will not check ack from slave */
-// #define ACK_VAL 0x0                 /*!< I2C ack value */
-// #define NACK_VAL 0x1                /*!< I2C nack value */
+#define I2C_MASTER_TX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
+#define I2C_MASTER_RX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
+#define WRITE_BIT I2C_MASTER_WRITE  /*!< I2C master write */
+#define READ_BIT I2C_MASTER_READ    /*!< I2C master read */
+#define ACK_CHECK_EN 0x1            /*!< I2C master will check ack from slave*/
+#define ACK_CHECK_DIS 0x0           /*!< I2C master will not check ack from slave */
+#define ACK_VAL 0x0                 /*!< I2C ack value */
+#define NACK_VAL 0x1                /*!< I2C nack value */
 
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + CONFIG_SPIFFS_OBJ_NAME_LEN)
 #define SCRATCH_BUFSIZE 8192
+
+uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt);
 
 struct file_server_data
 {
@@ -90,7 +91,7 @@ static int s_retry_num = 0;
 static const char *TAG = "wifi station";
 static ledc_channel_config_t ledc_channel;
 
-int8_t pos_count = 0;
+int16_t pos_count = 0;
 
 int16_t step_position = 0;
 int8_t speed = 0; // velocidade varia de -100% até 100%
@@ -146,69 +147,62 @@ static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filena
     return httpd_resp_set_type(req, "text/plain");
 }
 
-void set_direction(int8_t step)
+void move_direction(int16_t step)
 {
-    // static int pos_count = 0;
-    // #ifdef STEPPER_DRIVER
-    //     if (step == 1)
-    //         gpio_set_level(MOTOR_DIR, 1);
-    //     else if (step == -1)
-    //         gpio_set_level(MOTOR_DIR, 0);
-    //     else
-    //         return;
-
-    //     vTaskDelay(50 / portTICK_PERIOD_MS);
-    //     ESP_LOGI(TAG, "angle: %.2f", step_position * DEGREE_PER_STEP / MICROSTEP);
-    //     gpio_set_level(MOTOR_PULSE, 1);
-    //     vTaskDelay(200 / portTICK_PERIOD_MS);
-    //     gpio_set_level(MOTOR_PULSE, 0);
-    //     vTaskDelay(200 / portTICK_PERIOD_MS);
-    //     step_position += step;
-    //     // #elif SERVO_MOTOR
-
     // se step - pos count--
     //  * Step C0 C1 C2 C3
-    //  *    1  1  0  1  0
-    //  *    2  0  1  1  0
-    //  *    3  0  1  0  1
-    //  *    4  1  0  0  1
-    if (pos_count + step >= 0)
-        pos_count += step;
-    else
-        pos_count = 3;
+    //  *    1  1  0  0  0
+    //  *    2  0  1  0  0
+    //  *    3  0  0  1  0
+    //  *    4  0  0  0  1
+
+    // for 1/2 step - pos count--
+    //  * Step C0 C1 C2 C3
+    //  *    1  1  0  0  0
+    //  *    2  1  1  0  0
+    //  *    3  0  1  0  0
+    //  *    4  0  1  1  0
+    //  *    5  0  0  1  0
+    //  *    6  0  0  1  1
+    //  *    7  0  0  0  1
+    //  *    8  1  0  0  1
+
+    pos_count += step;
+
+    if (pos_count < 0)
+        pos_count = MAX_STEP;
+    else if (pos_count > MAX_STEP)
+        pos_count = 0;
+
+    // ESP_LOGI(TAG, "");
+    vTaskDelay(10/portTICK_PERIOD_MS);
+
     switch (pos_count % 4)
     {
     case 0:
         gpio_set_level(COIL1, 1);
         gpio_set_level(COIL2, 0);
-        gpio_set_level(COIL3, 1);
+        gpio_set_level(COIL3, 0);
         gpio_set_level(COIL4, 0);
         break;
     case 1:
         gpio_set_level(COIL1, 0);
         gpio_set_level(COIL2, 1);
-        gpio_set_level(COIL3, 1);
+        gpio_set_level(COIL3, 0);
         gpio_set_level(COIL4, 0);
         break;
     case 2:
         gpio_set_level(COIL1, 0);
-        gpio_set_level(COIL2, 1);
-        gpio_set_level(COIL3, 0);
-        gpio_set_level(COIL4, 1);
+        gpio_set_level(COIL2, 0);
+        gpio_set_level(COIL3, 1);
+        gpio_set_level(COIL4, 0);
         break;
-    case 3:
     default:
-        gpio_set_level(COIL1, 1);
+        gpio_set_level(COIL1, 0);
         gpio_set_level(COIL2, 0);
         gpio_set_level(COIL3, 0);
         gpio_set_level(COIL4, 1);
         break;
-
-        // gpio_set_level(COIL1, 0);
-        // gpio_set_level(COIL2, 0);
-        // gpio_set_level(COIL3, 0);
-        // gpio_set_level(COIL4, 0);
-        // break;
     }
 }
 
@@ -308,7 +302,14 @@ static esp_err_t root_assets_handler(httpd_req_t *req)
 
 static esp_err_t direction_handler(httpd_req_t *req)
 {
-    int8_t step;
+    int8_t i2cRet;
+    uint8_t *ang1 = malloc(sizeof(uint8_t));
+    uint8_t *ang2 = malloc(sizeof(uint8_t));
+    uint16_t angle = 0;
+    memset(ang1, 0x00, sizeof(uint8_t));
+    memset(ang2, 0x00, sizeof(uint8_t));
+
+    int16_t steps;
     // tamanho do conteúdo recebido pelo POST
     uint8_t len = req->content_len * sizeof(char *) + 1;
 
@@ -319,24 +320,28 @@ static esp_err_t direction_handler(httpd_req_t *req)
 
     // Recebe o conteúdo
     httpd_req_recv(req, content, req->content_len);
-    ESP_LOGI(TAG, "received: %s", content);
+    // ESP_LOGI(TAG, "");
 
     // Reconstrói o JSON
     cJSON *direction = cJSON_Parse(content);
 
     // step recebe apenas o valor do objeto x, como int
-    step = cJSON_GetObjectItem(direction, "x")->valueint;
-    ESP_LOGI(TAG, "step: %d", step);
+    steps = cJSON_GetObjectItem(direction, "x")->valueint;
+    // ESP_LOGI(TAG, "");
 
-    // lógica para cada step, não pode passar de 0 à 360 (mas pode ser 0 ou 360)
-    // if ((step_position + step) >= 0 && (step_position + step) <= MAX_STEP * MICROSTEP)
-    // {
-    set_direction(step);
-    // }
+    for (uint16_t i = 0; i < abs(steps); i++)
+    {
+        move_direction(steps / abs(steps));
+    }
+    vTaskDelay(20/portTICK_PERIOD_MS);
+    i2cRet = i2c_read(AS5600, REG13, ang1, 1);
+    i2cRet = i2c_read(AS5600, REG12, ang2, 1);
+    angle = (*ang2 << 8) | (*ang1);
+    ESP_LOGI(TAG, "%.12f;%.12f", (float)angle * 360 / 4095, (float)pos_count * DEGREE_PER_STEP / MICROSTEP);
 
     // Cria objeto JSON para enviar como resposta
     cJSON *resp = cJSON_CreateObject();
-    cJSON_AddNumberToObject(resp, "x", (float)step_position * DEGREE_PER_STEP / MICROSTEP);
+    cJSON_AddNumberToObject(resp, "x", (float)pos_count * DEGREE_PER_STEP / MICROSTEP);
 
     // alocação do buffer
     // LEMBRAR DE LIBERAR A MEMÓRIA FREE(VAR) !!!!!!!
@@ -509,18 +514,6 @@ void peripherical_init()
         ESP_LOGI(TAG, "PWM ERROR !!!");
     ESP_LOGI(TAG, "PWM init OK!");
 
-    // #ifdef STEPPER_DRIVER
-    //     gpio_set_direction(MOTOR_PULSE, GPIO_MODE_OUTPUT);
-    //     gpio_set_direction(MOTOR_DIR, GPIO_MODE_OUTPUT);
-    //     gpio_set_direction(MOTOR_EN, GPIO_MODE_OUTPUT);
-
-    //     gpio_set_level(MOTOR_EN, 1);
-    //     gpio_set_level(MOTOR_PULSE, 0);
-    //     gpio_set_level(MOTOR_DIR, 0);
-
-    //     step_position = MAX_STEP * MICROSTEP / 2;
-    // #elif SERVO_MOTOR
-    // #elif STEP_ULN2003
     gpio_set_direction(COIL1, GPIO_MODE_OUTPUT);
     gpio_set_direction(COIL2, GPIO_MODE_OUTPUT);
     gpio_set_direction(COIL3, GPIO_MODE_OUTPUT);
@@ -530,70 +523,73 @@ void peripherical_init()
     gpio_set_level(COIL2, 0);
     gpio_set_level(COIL3, 0);
     gpio_set_level(COIL4, 0);
-    // #endif
 
-    // ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
-    // i2c_config_t conf = {
-    //     .mode = I2C_MODE_MASTER,
-    //     .sda_io_num = I2C_MASTER_SDA_IO,         // select GPIO specific to your project
-    //     .scl_io_num = I2C_MASTER_SCL_IO,         // select GPIO specific to your project
-    //     .sda_pullup_en = GPIO_PULLUP_ENABLE,
-    //     .scl_pullup_en = GPIO_PULLUP_ENABLE,
-    //     .master.clk_speed = I2C_MASTER_FREQ_HZ,  // select frequency specific to your project
-    //     .clk_flags = 0,                          // you can use I2C_SCLK_SRC_FLAG_* flags to choose i2c source clock here
-    // };
-    // i2c_param_config(I2C_NUM_0, &conf);
+    ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
+    i2c_config_t conf = {
+        .mode = I2C_MODE_MASTER,
+        .sda_io_num = I2C_MASTER_SDA_IO, // select GPIO specific to your project
+        .scl_io_num = I2C_MASTER_SCL_IO, // select GPIO specific to your project
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .master.clk_speed = I2C_MASTER_FREQ_HZ, // select frequency specific to your project
+        .clk_flags = 0,                         // you can use I2C_SCLK_SRC_FLAG_* flags to choose i2c source clock here
+    };
+    i2c_param_config(I2C_NUM_0, &conf);
 }
 
-// void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt)
-// {
-// 	uint8_t iError = 0;
+void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt)
+{
+    uint8_t iError = 0;
 
-// 	esp_err_t espRc;
-// 	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    esp_err_t espRc;
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 
-// 	i2c_master_start(cmd);
-// 	i2c_master_write_byte(cmd, (dev_addr << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (dev_addr << 1) | I2C_MASTER_WRITE, true);
 
-// 	i2c_master_write_byte(cmd, reg_addr, true);
-// 	i2c_master_write(cmd, reg_data, cnt, true);
-// 	i2c_master_stop(cmd);
+    i2c_master_write_byte(cmd, reg_addr, true);
+    i2c_master_write(cmd, reg_data, cnt, true);
+    i2c_master_stop(cmd);
 
-// 	espRc = i2c_master_cmd_begin(I2C_NUM_0, cmd, 10 / portTICK_PERIOD_MS);
+    espRc = i2c_master_cmd_begin(I2C_NUM_0, cmd, 10 / portTICK_PERIOD_MS);
 
-// 	i2c_cmd_link_delete(cmd);
-// }
+    i2c_cmd_link_delete(cmd);
+}
 
-// uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt)
-// {
-// 	uint8_t iError = 0;
-// 	esp_err_t espRc;
+uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt)
+{
+    uint8_t iError = 0;
+    esp_err_t espRc;
 
-// 	  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-//             i2c_master_start(cmd);
-//             if (reg_addr != -1) {
-//                 i2c_master_write_byte(cmd, dev_addr << 1 | WRITE_BIT, ACK_CHECK_EN);
-//                 i2c_master_write_byte(cmd, reg_addr, ACK_CHECK_EN);
-//                 i2c_master_start(cmd);
-//             }
-//             i2c_master_write_byte(cmd, dev_addr << 1 | READ_BIT, ACK_CHECK_EN);
-//             if (cnt > 1) {
-//                 i2c_master_read(cmd, reg_data, cnt - 1, ACK_VAL);
-//             }
-//             i2c_master_read_byte(cmd, reg_data + cnt - 1, NACK_VAL);
-//             i2c_master_stop(cmd);
-//             esp_err_t ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, 1000 / portTICK_PERIOD_MS);
-//             i2c_cmd_link_delete(cmd);
-// 	        return iError;
-// }
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    if (reg_addr != -1)
+    {
+        i2c_master_write_byte(cmd, dev_addr << 1 | WRITE_BIT, ACK_CHECK_EN);
+        i2c_master_write_byte(cmd, reg_addr, ACK_CHECK_EN);
+        i2c_master_start(cmd);
+    }
+    i2c_master_write_byte(cmd, dev_addr << 1 | READ_BIT, ACK_CHECK_EN);
+    if (cnt > 1)
+    {
+        i2c_master_read(cmd, reg_data, cnt - 1, ACK_VAL);
+    }
+    i2c_master_read_byte(cmd, reg_data + cnt - 1, NACK_VAL);
+    i2c_master_stop(cmd);
+    espRc = i2c_master_cmd_begin(I2C_NUM_0, cmd, 1000 / portTICK_PERIOD_MS);
+    i2c_cmd_link_delete(cmd);
+    return iError;
+}
 
 void app_main()
 {
     esp_err_t ret;
-    // uint8_t rx_data[5];
     // int8_t i2cRet;
-    // uint8_t *press = malloc(2*sizeof(uint8_t));
-    // uint8_t *temp = malloc(2*sizeof(uint8_t));
+    // uint8_t *ang1 = malloc(sizeof(uint8_t));
+    // uint8_t *ang2 = malloc(sizeof(uint8_t));
+    // uint16_t angle = 0;
+    // memset(ang1, 0x00, sizeof(uint8_t));
+    // memset(ang2, 0x00, sizeof(uint8_t));
 
     peripherical_init();
 
@@ -633,5 +629,9 @@ void app_main()
     while (1)
     {
         vTaskDelay(500);
+        //     i2cRet = i2c_read(AS5600, REG13, ang1, 1);
+        //     i2cRet = i2c_read(AS5600, REG12, ang2, 1);
+        //     angle = (*ang2 << 8) | (*ang1);
+        //     ESP_LOGI(TAG, "Angle: %.12f", (float)angle * 360 / 4095);
     }
 }

@@ -31,14 +31,24 @@ body{
 
 .Xdir {
     width: 200px;
-    height: 200px;
+    height: 250px;
+    margin: auto;
+    background-color: rgb(70,70,70);
+    text-align: center;
+    align-content: center;
+    display: flex;
+    flex-wrap: wrap;
+    border-radius: 25px;
+}
+
+.steps{
+    width: 200px;
     margin: auto;
     background-color: rgb(70,70,70);
     text-align: center;
     align-content: center;
     display: flex;
     flex-wrap: nowrap;
-    border-radius: 25px;
 }
 
 .Ydir {
@@ -83,7 +93,9 @@ body{
 
 .text{
     color: rgb(200, 200, 200);
-    width: 200px;
+    width: auto;
+    margin: auto;
+    padding: auto;
     white-space: break-spaces;
 }
 
@@ -101,10 +113,7 @@ body{
 
 .btn:hover{
     cursor: pointer;
-    border-radius: 30px;
-    width: 60px;
-    height: 60px;
-    font-size: 50px;
+    background-color: rgb(0, 180, 0);
 }
 
 #truck{
@@ -124,31 +133,6 @@ body{
 #baixo{
     margin-left: 75px;
     margin-bottom: 25px;
-}
-#baixo:hover{
-    margin-left: 70px;
-    margin-bottom: 20px;
-}
-#cima:hover{
-    margin-left: 70px;
-    margin-top: 20px;
-}
-
-#esquerda{
-    margin-left: 25px;
-    margin-top: 75px;
-}
-#direita{
-    margin-right: 25px;
-    margin-top: 75px;
-}
-#esquerda:hover{
-    margin-left: 20px;
-    margin-top: 70px;
-}
-#direita:hover{
-    margin-right: 20px;
-    margin-top: 70px;
 }
 
 #BatError{
