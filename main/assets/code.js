@@ -6,10 +6,10 @@ var Sensor;
 var readBattery = 0;
 var timeout = 80;
 
-// ---------------- 1 step --------------------//
+// ---------------- ~1 degree --------------------//
 $("#direita1").mousedown(function () {
     up = setInterval(function () {
-        dir = 1;
+        dir = 12;
         direction_send();
     }, timeout);
 });
@@ -22,7 +22,7 @@ $("#direita1").mouseout(function () {
 
 $("#esquerda1").mousedown(function () {
     up = setInterval(function () {
-        dir = -1;
+        dir = -12;
         direction_send();
     }, timeout);
 });
@@ -33,11 +33,11 @@ $("#esquerda1").mouseout(function () {
     clearInterval(up);
 });
 
-// ---------------- 10 step --------------------//
+// ---------------- 11,25 degrees ------------------//
 
 $("#direita10").mousedown(function () {
     up = setInterval(function () {
-        dir = 10;
+        dir = 128;
         direction_send();
     }, timeout);
 });
@@ -50,7 +50,7 @@ $("#direita10").mouseout(function () {
 
 $("#esquerda10").mousedown(function () {
     up = setInterval(function () {
-        dir = -10;
+        dir = -128;
         direction_send();
     }, timeout);
 });
@@ -61,11 +61,11 @@ $("#esquerda10").mouseout(function () {
     clearInterval(up);
 });
 
-// ---------------- 1000 step --------------------//
+// ---------------- 90 degrees --------------------//
 
 $("#direita100").mousedown(function () {
     up = setInterval(function () {
-        dir = 100;
+        dir = 1024;
         direction_send();
     }, timeout);
 });
@@ -78,7 +78,7 @@ $("#direita100").mouseout(function () {
 
 $("#esquerda100").mousedown(function () {
     up = setInterval(function () {
-        dir = -100;
+        dir = -1024;
         direction_send();
     }, timeout);
 });
@@ -89,7 +89,7 @@ $("#esquerda100").mouseout(function () {
     clearInterval(up);
 });
 
-// ---------------- Full revolution --------------------//
+// ---------------- 360 degrees --------------------//
 
 $("#direitaFull").mousedown(function () {
     up = setInterval(function () {
@@ -125,20 +125,25 @@ function direction_send() {
         type: "POST",
         url: "/direction",
         data: JSON.stringify(direction),
-        success: function (result) { 
+        success: function (result) {
             Sensor = jQuery.parseJSON(result);
             $("#Angle").html('<p class="text" id="ang">Angle: ' + Sensor.x + 'º</p>');
         },
         error: function (result) {
             alert('error');
         }
-        
+
     });
 }
 
-
-// $(document).ready(function(){
-//     readBattery = setInterval(function(){
-
-//     });
-// });
+$("body").ready(function () {
+    readBattery = setInterval(function () {
+        $("#battery").load("/sensors/BatteryLevel/lvl.txt", function (responseTxt, statusTxt, xhr) {
+            if (statusTxt == "success") {
+                alert(1);
+            }
+            else {
+            }
+        });
+    }, 1000);
+});

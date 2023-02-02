@@ -47,6 +47,7 @@
 #define MICROSTEP 1
 #define MAX_STEP 4096
 #define DEGREE_PER_STEP 360 / MAX_STEP
+#define STEP_COMPENSATOR 36
 #define COIL1 32
 #define COIL2 33
 #define COIL3 25
@@ -93,6 +94,7 @@ static const char *TAG = "wifi station";
 static ledc_channel_config_t ledc_channel;
 
 int16_t pos_count = 0;
+int8_t dir_step = 0;
 
 int16_t step_position = 0;
 int8_t speed = 0; // velocidade varia de -100% até 100%
@@ -142,6 +144,11 @@ static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filena
     {
         ESP_LOGI(TAG, "file is a .png");
         return httpd_resp_set_type(req, "image/png");
+    }
+    else if (IS_FILE_EXT(filename, ".txt"))
+    {
+        ESP_LOGI(TAG, "file is a .txt");
+        return httpd_resp_set_type(req, "text");
     }
     /* This is a limited set only */
     /* For any other type always set as plain text */
@@ -322,6 +329,14 @@ static esp_err_t root_assets_handler(httpd_req_t *req)
         httpd_resp_send(req, (char *)jquery_start, jquery_end - jquery_start - 1);
         ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
     }
+    else if (strcasecmp((char *)req->uri, "/assets/sensors/BatteryLevel/lvl.txt") == 0)
+    {
+        extern const uint8_t batLvL_start[] asm("_binary_lvl_txt_start"); // uint8_t
+        extern const uint8_t batLvL_end[] asm("_binary_lvl_txt_end");     // uint8_t
+        set_content_type_from_file(req, (char *)req->uri);
+        httpd_resp_send(req, (char *)batLvL_start, batLvL_end - batLvL_start - 1);
+        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
+    }
     return ESP_OK;
 }
 
@@ -352,12 +367,29 @@ static esp_err_t direction_handler(httpd_req_t *req)
 
     // step recebe apenas o valor do objeto x, como int
     steps = cJSON_GetObjectItem(direction, "x")->valueint;
-    // ESP_LOGI(TAG, "");
 
+    // ESP_LOGI(TAG, "steps: %d", steps);
+    // Como saber a condição inicial, no caso a última direção antes de ligar?
+    if (steps / abs(steps) != dir_step)
+    {
+        if (steps / abs(steps) == -1)
+        {
+            dir_step = -1;
+            steps -= STEP_COMPENSATOR;
+        }
+        else
+        {
+            dir_step = 1;
+            steps += STEP_COMPENSATOR;
+        }
+    }
+
+    ESP_LOGI(TAG, "steps: %d, calc: %d", steps, steps / abs(steps));
     for (uint16_t i = 0; i < abs(steps); i++)
     {
         move_direction(steps / abs(steps));
     }
+
     vTaskDelay(20 / portTICK_PERIOD_MS);
     i2cRet = i2c_read(AS5600, REG13, ang1, 1);
     i2cRet = i2c_read(AS5600, REG12, ang2, 1);
