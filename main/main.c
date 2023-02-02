@@ -8,6 +8,7 @@
 
 #include <rom/ets_sys.h>
 #include <esp_types.h>
+#include <esp_task_wdt.h>
 #include <esp_rom_gpio.h>
 #include "esp_chip_info.h"
 #include "esp_flash.h"
@@ -44,7 +45,7 @@
 //***************************************************************//
 
 #define MICROSTEP 1
-#define MAX_STEP 4075
+#define MAX_STEP 4096
 #define DEGREE_PER_STEP 360 / MAX_STEP
 #define COIL1 32
 #define COIL2 33
@@ -171,13 +172,13 @@ void move_direction(int16_t step)
 
     if (pos_count < 0)
         pos_count = MAX_STEP;
-    else if (pos_count > MAX_STEP)
+    else if (pos_count >= MAX_STEP)
         pos_count = 0;
 
-    // ESP_LOGI(TAG, "");
-    vTaskDelay(10/portTICK_PERIOD_MS);
+    // ESP_LOGI(TAG, "step");
+    vTaskDelay(10 / portTICK_PERIOD_MS);
 
-    switch (pos_count % 4)
+    switch (pos_count % 8)
     {
     case 0:
         gpio_set_level(COIL1, 1);
@@ -186,19 +187,43 @@ void move_direction(int16_t step)
         gpio_set_level(COIL4, 0);
         break;
     case 1:
-        gpio_set_level(COIL1, 0);
+        gpio_set_level(COIL1, 1);
         gpio_set_level(COIL2, 1);
         gpio_set_level(COIL3, 0);
         gpio_set_level(COIL4, 0);
         break;
     case 2:
         gpio_set_level(COIL1, 0);
+        gpio_set_level(COIL2, 1);
+        gpio_set_level(COIL3, 0);
+        gpio_set_level(COIL4, 0);
+        break;
+    case 3:
+        gpio_set_level(COIL1, 0);
+        gpio_set_level(COIL2, 1);
+        gpio_set_level(COIL3, 1);
+        gpio_set_level(COIL4, 0);
+        break;
+    case 4:
+        gpio_set_level(COIL1, 0);
         gpio_set_level(COIL2, 0);
         gpio_set_level(COIL3, 1);
         gpio_set_level(COIL4, 0);
         break;
-    default:
+    case 5:
         gpio_set_level(COIL1, 0);
+        gpio_set_level(COIL2, 0);
+        gpio_set_level(COIL3, 1);
+        gpio_set_level(COIL4, 1);
+        break;
+    case 6:
+        gpio_set_level(COIL1, 0);
+        gpio_set_level(COIL2, 0);
+        gpio_set_level(COIL3, 0);
+        gpio_set_level(COIL4, 1);
+        break;
+    default:
+        gpio_set_level(COIL1, 1);
         gpio_set_level(COIL2, 0);
         gpio_set_level(COIL3, 0);
         gpio_set_level(COIL4, 1);
@@ -333,7 +358,7 @@ static esp_err_t direction_handler(httpd_req_t *req)
     {
         move_direction(steps / abs(steps));
     }
-    vTaskDelay(20/portTICK_PERIOD_MS);
+    vTaskDelay(20 / portTICK_PERIOD_MS);
     i2cRet = i2c_read(AS5600, REG13, ang1, 1);
     i2cRet = i2c_read(AS5600, REG12, ang2, 1);
     angle = (*ang2 << 8) | (*ang1);

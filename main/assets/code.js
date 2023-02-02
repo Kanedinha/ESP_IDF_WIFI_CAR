@@ -93,7 +93,7 @@ $("#esquerda100").mouseout(function () {
 
 $("#direitaFull").mousedown(function () {
     up = setInterval(function () {
-        dir = 4075;
+        dir = 4096;
         direction_send();
     }, timeout);
 });
@@ -106,7 +106,7 @@ $("#direitaFull").mouseout(function () {
 
 $("#esquerdaFull").mousedown(function () {
     up = setInterval(function () {
-        dir = -4075;
+        dir = -4096;
         direction_send();
     }, timeout);
 });
