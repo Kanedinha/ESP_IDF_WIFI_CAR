@@ -2,6 +2,7 @@ idf_component_register(
 SRCS 
     "iot_servo.c" 
     "main.c"
+    "bme280.c"
 INCLUDE_DIRS 
     "." 
 EMBED_TXTFILES 
@@ -12,5 +13,5 @@ EMBED_TXTFILES
     "assets/trator.gif" 
     "assets/F.ico" 
     "assets/jquery-3.6.3.min.js"
-    "sensors/BatteryLevel/lvl.txt"
+    "assets/sensors/BatteryLevel/lvl.txt"
 )

@@ -14,6 +14,7 @@
 #include "esp_flash.h"
 #include "esp_system.h"
 #include <esp_wifi.h>
+#include "esp_netif.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_mac.h"
@@ -30,7 +31,10 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "freertos/timers.h"
+#include "freertos/semphr.h"
+#include "freertos/queue.h"
 #include "cJSON.h"
+#include "bme280.h"
 
 #include "nvs_flash.h"
 #include "lwip/err.h"
@@ -52,6 +56,8 @@
 #define COIL2 33
 #define COIL3 25
 #define COIL4 26
+#define H_BRIDGE_1 27
+#define H_BRIDGE_2 14
 
 #define EXAMPLE_ESP_WIFI_SSID "Projetos"
 #define EXAMPLE_ESP_WIFI_PASS "ftn22182"
@@ -80,13 +86,16 @@
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + CONFIG_SPIFFS_OBJ_NAME_LEN)
 #define SCRATCH_BUFSIZE 8192
 
+void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt);
 uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt);
+void BME280_delay_msek(u32 msek);
 
 struct file_server_data
 {
     char base_path[ESP_VFS_PATH_MAX + 1];
     char scratch[SCRATCH_BUFSIZE];
 };
+struct bme280_t bme280;
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
@@ -98,6 +107,8 @@ int8_t dir_step = 0;
 
 int16_t step_position = 0;
 int8_t speed = 0; // velocidade varia de -100% até 100%
+uint8_t batteryLevel = 0;
+float temperature = 0;
 
 #define IS_FILE_EXT(filename, ext) \
     (strcasecmp(&filename[strlen(filename) - sizeof(ext) + 1], ext) == 0)
@@ -148,7 +159,7 @@ static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filena
     else if (IS_FILE_EXT(filename, ".txt"))
     {
         ESP_LOGI(TAG, "file is a .txt");
-        return httpd_resp_set_type(req, "text");
+        return httpd_resp_set_type(req, "text/plain");
     }
     /* This is a limited set only */
     /* For any other type always set as plain text */
@@ -340,6 +351,70 @@ static esp_err_t root_assets_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t root_sensors_handler(httpd_req_t *req)
+{
+    if (strcasecmp((char *)req->uri, "/sensors/BatteryLevel") == 0)
+    {
+        cJSON *resp = cJSON_CreateObject();
+        cJSON_AddNumberToObject(resp, "BatLvL", batteryLevel);
+
+        char *buff = malloc(sizeof(resp) + 1);
+        memset(buff, 0x00, sizeof(resp) + 1);
+
+        buff = cJSON_Print(resp);
+
+        httpd_resp_send(req, buff, strlen(buff));
+        cJSON_Delete(resp);
+        free(buff);
+    }
+    else if (strcasecmp((char *)req->uri, "/sensors/Temperature") == 0)
+    {
+        s32 com_rslt;
+        s32 v_uncomp_pressure_s32;
+        s32 v_uncomp_temperature_s32;
+        s32 v_uncomp_humidity_s32;
+        
+        com_rslt = bme280_read_uncomp_pressure_temperature_humidity(&v_uncomp_pressure_s32, &v_uncomp_temperature_s32, &v_uncomp_humidity_s32);
+
+        if (com_rslt == SUCCESS)
+        {
+            double temp = bme280_compensate_temperature_double(v_uncomp_temperature_s32);
+            temperature = (float)temp;
+            ESP_LOGI(TAG, "temp: %.2f", temp);
+            cJSON *resp = cJSON_CreateObject();
+            cJSON_AddNumberToObject(resp, "Temp", temperature);
+
+            char *buff = malloc(sizeof(resp) + 1);
+            memset(buff, 0x00, sizeof(resp) + 1);
+
+            buff = cJSON_Print(resp);
+
+            httpd_resp_send(req, buff, strlen(buff));
+            cJSON_Delete(resp);
+            free(buff);
+        }
+        else
+        {
+            ESP_LOGI(TAG, "BME Bad reading: %d", com_rslt);
+        }
+    }
+    else if (strcasecmp((char *)req->uri, "/sensors/Speed") == 0)
+    {
+        cJSON *resp = cJSON_CreateObject();
+        cJSON_AddNumberToObject(resp, "Speed", speed);
+
+        char *buff = malloc(sizeof(resp) + 1);
+        memset(buff, 0x00, sizeof(resp) + 1);
+
+        buff = cJSON_Print(resp);
+
+        httpd_resp_send(req, buff, strlen(buff));
+        cJSON_Delete(resp);
+        free(buff);
+    }
+    return ESP_OK;
+}
+
 static esp_err_t direction_handler(httpd_req_t *req)
 {
     int8_t i2cRet;
@@ -367,6 +442,7 @@ static esp_err_t direction_handler(httpd_req_t *req)
 
     // step recebe apenas o valor do objeto x, como int
     steps = cJSON_GetObjectItem(direction, "x")->valueint;
+    speed = cJSON_GetObjectItem(direction, "y")->valueint;
 
     // ESP_LOGI(TAG, "steps: %d", steps);
     // Como saber a condição inicial, no caso a última direção antes de ligar?
@@ -464,6 +540,12 @@ httpd_uri_t root_assets_uri = {
     .handler = root_assets_handler,
     .user_ctx = NULL};
 
+httpd_uri_t root_sensors_uri = {
+    .uri = "/sensors/*",
+    .method = HTTP_GET,
+    .handler = root_sensors_handler,
+    .user_ctx = NULL};
+
 esp_err_t wifi_init(void)
 {
     s_wifi_event_group = xEventGroupCreate();
@@ -497,7 +579,6 @@ esp_err_t wifi_init(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
-
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
                                            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
                                            pdFALSE,
@@ -540,6 +621,7 @@ esp_err_t web_server()
     }
     ESP_LOGI(TAG, "WEB Server initialized sus !!!\n");
 
+    httpd_register_uri_handler(server, &root_sensors_uri);
     httpd_register_uri_handler(server, &root_assets_uri);
     httpd_register_uri_handler(server, &direction_uri);
     httpd_register_uri_handler(server, &root_uri);
@@ -575,11 +657,15 @@ void peripherical_init()
     gpio_set_direction(COIL2, GPIO_MODE_OUTPUT);
     gpio_set_direction(COIL3, GPIO_MODE_OUTPUT);
     gpio_set_direction(COIL4, GPIO_MODE_OUTPUT);
+    gpio_set_direction(H_BRIDGE_1, GPIO_MODE_OUTPUT);
+    gpio_set_direction(H_BRIDGE_2, GPIO_MODE_OUTPUT);
 
     gpio_set_level(COIL1, 0);
     gpio_set_level(COIL2, 0);
     gpio_set_level(COIL3, 0);
     gpio_set_level(COIL4, 0);
+    gpio_set_level(H_BRIDGE_1, 0);
+    gpio_set_level(H_BRIDGE_2, 0);
 
     ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
     i2c_config_t conf = {
@@ -592,6 +678,36 @@ void peripherical_init()
         .clk_flags = 0,                         // you can use I2C_SCLK_SRC_FLAG_* flags to choose i2c source clock here
     };
     i2c_param_config(I2C_NUM_0, &conf);
+
+    bme280.bus_write = i2c_write;
+    bme280.bus_read = i2c_read;
+    bme280.dev_addr = BME280_I2C_ADDRESS1;
+    bme280.delay_msec = BME280_delay_msek;
+
+    s32 com_rslt;
+
+    com_rslt = bme280_init(&bme280);
+    ESP_LOGI(TAG, "bme init: %d", com_rslt);
+    com_rslt += bme280_set_oversamp_pressure(BME280_OVERSAMP_16X);
+    ESP_LOGI(TAG, "bme press: %d", com_rslt);
+    com_rslt += bme280_set_oversamp_temperature(BME280_OVERSAMP_2X);
+    ESP_LOGI(TAG, "bme temp: %d", com_rslt);
+
+    com_rslt += bme280_set_power_mode(BME280_NORMAL_MODE);
+    ESP_LOGI(TAG, "bme pwr mode: %d", com_rslt);
+    if (com_rslt == SUCCESS)
+    {
+        ESP_LOGI(TAG, "BME280 init!");
+    }
+    else
+    {
+        ESP_LOGI(TAG, "BME280 ERROR !!!");
+    }
+}
+
+void BME280_delay_msek(u32 msek)
+{
+    vTaskDelay(msek / portTICK_PERIOD_MS);
 }
 
 void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt)
@@ -686,9 +802,5 @@ void app_main()
     while (1)
     {
         vTaskDelay(500);
-        //     i2cRet = i2c_read(AS5600, REG13, ang1, 1);
-        //     i2cRet = i2c_read(AS5600, REG12, ang2, 1);
-        //     angle = (*ang2 << 8) | (*ang1);
-        //     ESP_LOGI(TAG, "Angle: %.12f", (float)angle * 360 / 4095);
     }
 }

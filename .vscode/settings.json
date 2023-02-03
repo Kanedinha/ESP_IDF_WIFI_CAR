@@ -24,7 +24,8 @@
         "ff.h": "c",
         "diskio.h": "c",
         "float.h": "c",
-        "ledc.h": "c"
+        "ledc.h": "c",
+        "iot_servo.h": "c"
     }
 }
  
