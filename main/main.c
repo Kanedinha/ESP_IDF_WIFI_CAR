@@ -59,6 +59,8 @@
 #define H_BRIDGE_1 27
 #define H_BRIDGE_2 14
 
+#define SERVO_CH0_PIN 12
+
 #define EXAMPLE_ESP_WIFI_SSID "Projetos"
 #define EXAMPLE_ESP_WIFI_PASS "ftn22182"
 #define EXAMPLE_ESP_MAXIMUM_RETRY 10
@@ -104,6 +106,7 @@ static ledc_channel_config_t ledc_channel;
 
 int16_t pos_count = 0;
 int8_t dir_step = 0;
+uint8_t angle = 0;
 
 int16_t step_position = 0;
 int8_t speed = 0; // velocidade varia de -100% até 100%
@@ -247,6 +250,7 @@ void move_direction(int16_t step)
         gpio_set_level(COIL4, 1);
         break;
     }
+
 }
 
 static const char *get_path_from_uri(char *dest, const char *base_path, const char *uri, size_t destsize)
@@ -373,7 +377,7 @@ static esp_err_t root_sensors_handler(httpd_req_t *req)
         s32 v_uncomp_pressure_s32;
         s32 v_uncomp_temperature_s32;
         s32 v_uncomp_humidity_s32;
-        
+
         com_rslt = bme280_read_uncomp_pressure_temperature_humidity(&v_uncomp_pressure_s32, &v_uncomp_temperature_s32, &v_uncomp_humidity_s32);
 
         if (com_rslt == SUCCESS)
@@ -444,6 +448,8 @@ static esp_err_t direction_handler(httpd_req_t *req)
     steps = cJSON_GetObjectItem(direction, "x")->valueint;
     speed = cJSON_GetObjectItem(direction, "y")->valueint;
 
+    angle += steps;
+    iot_servo_write_angle(LEDC_LOW_SPEED_MODE, 0, angle);
     // ESP_LOGI(TAG, "steps: %d", steps);
     // Como saber a condição inicial, no caso a última direção antes de ligar?
     if (steps / abs(steps) != dir_step)
@@ -653,6 +659,24 @@ void peripherical_init()
         ESP_LOGI(TAG, "PWM ERROR !!!");
     ESP_LOGI(TAG, "PWM init OK!");
 
+    servo_config_t servo_cfg = {
+        .max_angle = 180,
+        .min_width_us = 500,
+        .max_width_us = 2500,
+        .freq = 50,
+        .timer_number = LEDC_TIMER_0,
+        .channels = {
+            .servo_pin = {
+                SERVO_CH0_PIN,
+            },
+            .ch = {
+                LEDC_CHANNEL_0,
+            },
+        },
+        .channel_number = 1,
+    };
+    iot_servo_init(LEDC_LOW_SPEED_MODE, &servo_cfg);
+
     gpio_set_direction(COIL1, GPIO_MODE_OUTPUT);
     gpio_set_direction(COIL2, GPIO_MODE_OUTPUT);
     gpio_set_direction(COIL3, GPIO_MODE_OUTPUT);
@@ -757,12 +781,6 @@ uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t 
 void app_main()
 {
     esp_err_t ret;
-    // int8_t i2cRet;
-    // uint8_t *ang1 = malloc(sizeof(uint8_t));
-    // uint8_t *ang2 = malloc(sizeof(uint8_t));
-    // uint16_t angle = 0;
-    // memset(ang1, 0x00, sizeof(uint8_t));
-    // memset(ang2, 0x00, sizeof(uint8_t));
 
     peripherical_init();
 
@@ -790,15 +808,6 @@ void app_main()
     ESP_LOGI(TAG, "DALE\n");
     ESP_ERROR_CHECK(ret);
 
-    // i2c_write(BMP280_ADDR, 0xF4, (uint8_t*)0x27, 1);
-    // while(1){
-    //     vTaskDelay(200);
-    //     i2cRet = i2c_read(BMP280_ADDR,0xF3, press, 2);
-    //     ESP_LOG_BUFFER_HEX(TAG, press, 2);
-    //     i2cRet = i2c_read(BMP280_ADDR,0xF4, temp,2);
-    //     ESP_LOG_BUFFER_HEX(TAG, temp, 2);
-    //     ESP_LOGI(TAG,"-----------");
-    // }
     while (1)
     {
         vTaskDelay(500);

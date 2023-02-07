@@ -1,2 +1,0 @@
-<p class="text">Battery: 50%  ┤    █ █│</p>
-<p class="text" id="BatCheck">√</p>
