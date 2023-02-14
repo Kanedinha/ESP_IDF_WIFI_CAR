@@ -9,15 +9,6 @@ var readSpeed = 0;
 var timeout = 80;
 var motion = null;
 
-window.addEventListener('devicemotion', function (event) {
-    x = document.getElementById("x");
-    y = document.getElementById("y");
-    z = document.getElementById("z");
-    x.innerHTML = 'x' + event.acceleration.x + ' m/s2';
-    y.innerHTML = 'y' + event.acceleration.y + ' m/s2';
-    z.innerHTML = 'z' + event.acceleration.z + ' m/s2';
-});
-
 // ---------------- ~1 degree --------------------//
 $("#direita1").mousedown(function () {
     up = setInterval(function () {
@@ -207,7 +198,7 @@ $("body").ready(function () {
             url: "/sensors/BatteryLevel",
             success: function (result) {
                 Sensor = jQuery.parseJSON(result);
-                $("#battery").html('<p class="text">Battery: ' + Sensor.BatLvL + '% </p>');
+                $("#battery").html('<p class="text">Battery: ' + (Sensor.BatLvL / 5 * 100).toFixed(2) + '% </p>');
             },
             error: function (result) {
                 alert('error');

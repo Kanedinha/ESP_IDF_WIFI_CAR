@@ -35,6 +35,7 @@
 #include "freertos/queue.h"
 #include "cJSON.h"
 #include "bme280.h"
+#include "ADS1115.h"
 
 #include "nvs_flash.h"
 #include "lwip/err.h"
@@ -76,6 +77,9 @@
 #define REG13 0X0D
 // #define BMP280_ADDR 0x76
 
+#define ADS1115 0x48
+#define ADS1115_LSB_SIZE 0.0001875
+
 #define I2C_MASTER_TX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
 #define WRITE_BIT I2C_MASTER_WRITE  /*!< I2C master write */
@@ -98,6 +102,7 @@ struct file_server_data
     char scratch[SCRATCH_BUFSIZE];
 };
 struct bme280_t bme280;
+ads1115_t ads1115_cfg;
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
@@ -110,7 +115,7 @@ uint8_t angle = 0;
 
 int16_t step_position = 0;
 int8_t speed = 0; // velocidade varia de -100% até 100%
-uint8_t batteryLevel = 0;
+float batteryLevel = 0;
 float temperature = 0;
 
 #define IS_FILE_EXT(filename, ext) \
@@ -250,7 +255,6 @@ void move_direction(int16_t step)
         gpio_set_level(COIL4, 1);
         break;
     }
-
 }
 
 static const char *get_path_from_uri(char *dest, const char *base_path, const char *uri, size_t destsize)
@@ -359,6 +363,13 @@ static esp_err_t root_sensors_handler(httpd_req_t *req)
 {
     if (strcasecmp((char *)req->uri, "/sensors/BatteryLevel") == 0)
     {
+        uint16_t adc_read = 0;
+        ADS1115_request_single_ended_AIN1(); 
+        while (!ADS1115_get_conversion_state())
+            vTaskDelay(1 / portTICK_PERIOD_MS); 
+        adc_read = ADS1115_get_conversion();
+        batteryLevel = adc_read * ADS1115_LSB_SIZE;
+        ESP_LOGI(TAG, "BatLvL: %.2f V", batteryLevel);
         cJSON *resp = cJSON_CreateObject();
         cJSON_AddNumberToObject(resp, "BatLvL", batteryLevel);
 
@@ -727,6 +738,15 @@ void peripherical_init()
     {
         ESP_LOGI(TAG, "BME280 ERROR !!!");
     }
+
+    ads1115_cfg.reg_cfg = ADS1115_CFG_LS_COMP_MODE_TRAD | // Comparator is traditional
+                          ADS1115_CFG_LS_COMP_LAT_NON |   // Comparator is non-latching
+                          ADS1115_CFG_LS_COMP_POL_LOW |   // Alert is active low
+                          ADS1115_CFG_LS_COMP_QUE_DIS |   // Compator is disabled
+                          ADS1115_CFG_LS_DR_1600SPS |     // No. of samples to take
+                          ADS1115_CFG_MS_MODE_SS;
+    ads1115_cfg.dev_addr = 0x48;
+    ADS1115_initiate(&ads1115_cfg);
 }
 
 void BME280_delay_msek(u32 msek)

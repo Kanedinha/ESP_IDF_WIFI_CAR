@@ -3,6 +3,7 @@ SRCS
     "iot_servo.c" 
     "main.c"
     "bme280.c"
+    "ADS1115.c"
 INCLUDE_DIRS 
     "." 
 EMBED_TXTFILES 

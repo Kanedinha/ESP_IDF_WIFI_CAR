@@ -25,7 +25,9 @@
         "diskio.h": "c",
         "float.h": "c",
         "ledc.h": "c",
-        "iot_servo.h": "c"
+        "iot_servo.h": "c",
+        "esp_http_server.h": "c",
+        "functional": "c"
     }
 }
  
