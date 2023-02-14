@@ -364,9 +364,9 @@ static esp_err_t root_sensors_handler(httpd_req_t *req)
     if (strcasecmp((char *)req->uri, "/sensors/BatteryLevel") == 0)
     {
         uint16_t adc_read = 0;
-        ADS1115_request_single_ended_AIN1(); 
+        ADS1115_request_single_ended_AIN1();
         while (!ADS1115_get_conversion_state())
-            vTaskDelay(1 / portTICK_PERIOD_MS); 
+            vTaskDelay(1 / portTICK_PERIOD_MS);
         adc_read = ADS1115_get_conversion();
         batteryLevel = adc_read * ADS1115_LSB_SIZE;
         ESP_LOGI(TAG, "BatLvL: %.2f V", batteryLevel);
@@ -459,35 +459,53 @@ static esp_err_t direction_handler(httpd_req_t *req)
     steps = cJSON_GetObjectItem(direction, "x")->valueint;
     speed = cJSON_GetObjectItem(direction, "y")->valueint;
 
-    angle += steps;
-    iot_servo_write_angle(LEDC_LOW_SPEED_MODE, 0, angle);
-    // ESP_LOGI(TAG, "steps: %d", steps);
-    // Como saber a condição inicial, no caso a última direção antes de ligar?
-    if (steps / abs(steps) != dir_step)
+    ESP_LOGI(TAG, "steps: %d", steps);
+    ESP_LOGI(TAG, "speed: %d", speed);
+    if (speed > 0)
     {
-        if (steps / abs(steps) == -1)
-        {
-            dir_step = -1;
-            steps -= STEP_COMPENSATOR;
-        }
-        else
-        {
-            dir_step = 1;
-            steps += STEP_COMPENSATOR;
-        }
+        gpio_set_level(H_BRIDGE_1, 1);
+        gpio_set_level(H_BRIDGE_2, 0);
+    }
+    else if (speed < 0)
+    {
+        gpio_set_level(H_BRIDGE_1, 0);
+        gpio_set_level(H_BRIDGE_2, 1);
+    }
+    else
+    {
+        gpio_set_level(H_BRIDGE_1, 0);
+        gpio_set_level(H_BRIDGE_2, 0);
     }
 
-    ESP_LOGI(TAG, "steps: %d, calc: %d", steps, steps / abs(steps));
-    for (uint16_t i = 0; i < abs(steps); i++)
+    ESP_LOGI(TAG, "steps: %d", steps);
+    if (abs(steps) != 0)
     {
-        move_direction(steps / abs(steps));
-    }
+        // Como saber a condição inicial, no caso a última direção antes de ligar?
+        if (steps / abs(steps) != dir_step)
+        {
+            if (steps / abs(steps) == -1)
+            {
+                dir_step = -1;
+                steps -= STEP_COMPENSATOR;
+            }
+            else
+            {
+                dir_step = 1;
+                steps += STEP_COMPENSATOR;
+            }
+        }
 
-    vTaskDelay(20 / portTICK_PERIOD_MS);
-    i2cRet = i2c_read(AS5600, REG13, ang1, 1);
-    i2cRet = i2c_read(AS5600, REG12, ang2, 1);
-    angle = (*ang2 << 8) | (*ang1);
-    ESP_LOGI(TAG, "%.12f;%.12f", (float)angle * 360 / 4095, (float)pos_count * DEGREE_PER_STEP / MICROSTEP);
+        ESP_LOGI(TAG, "steps: %d, calc: %d", steps, steps / abs(steps));
+        for (uint16_t i = 0; i < abs(steps); i++)
+        {
+            move_direction(steps / abs(steps));
+        }
+    }
+    // vTaskDelay(20 / portTICK_PERIOD_MS);
+    // i2cRet = i2c_read(AS5600, REG13, ang1, 1);
+    // i2cRet = i2c_read(AS5600, REG12, ang2, 1);
+    // angle = (*ang2 << 8) | (*ang1);
+    // ESP_LOGI(TAG, "%.12f;%.12f", (float)angle * 360 / 4095, (float)pos_count * DEGREE_PER_STEP / MICROSTEP);
 
     // Cria objeto JSON para enviar como resposta
     cJSON *resp = cJSON_CreateObject();
