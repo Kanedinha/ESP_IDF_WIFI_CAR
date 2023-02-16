@@ -183,7 +183,7 @@ function direction_send() {
             $("#Angle").html('<p class="text">Angle: ' + Sensor.x.toFixed(2) + 'º</p>');
         },
         error: function (result) {
-            alert('error');
+            alert('Direction Send Error');
         }
     });
 }
@@ -201,7 +201,7 @@ $("body").ready(function () {
                 $("#battery").html('<p class="text">Battery: ' + (Sensor.BatLvL / 5 * 100).toFixed(2) + '% </p>');
             },
             error: function (result) {
-                alert('error');
+                alert('Battery Level Sensor Error');
             }
         });
     }, 10000);
@@ -215,7 +215,7 @@ $("body").ready(function () {
                 $("#temperature").html('<p class="text">Temperature: ' + Sensor.Temp.toFixed(2) + ' ºC</p>');
             },
             error: function (result) {
-                alert('error');
+                alert('Temperature Sensor Error');
             }
         });
     }, 5000);
@@ -229,10 +229,22 @@ $("body").ready(function () {
                 $("#speed").html('<p class="text">Speed: ' + Sensor.Speed + ' Km/h</p>');
             },
             error: function (result) {
-                alert('error');
+                alert('Speed Sensor Error');
             }
         });
     }, 1000);
 
-
+    CAM = setInterval(function () {
+        $.ajax({
+            type: "GET",
+            url: "/sensors/Camera",
+            success: function (result) {
+                VideoImage = jQuery.parseJSON(result);
+                // $("#battery").html('<p class="text">Battery: ' + (Sensor.BatLvL / 5 * 100).toFixed(2) + '% </p>');
+            },
+            error: function (result) {
+                alert('CAM Error');
+            }
+        });
+    }, 1);
 });

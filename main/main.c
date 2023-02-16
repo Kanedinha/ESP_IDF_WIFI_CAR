@@ -8,6 +8,7 @@
 
 #include <rom/ets_sys.h>
 #include <esp_types.h>
+#include "esp_timer.h"
 #include <esp_task_wdt.h>
 #include <esp_rom_gpio.h>
 #include "esp_chip_info.h"
@@ -52,21 +53,22 @@
 
 #define CAM_PIN_PWDN -1  // power down is not used
 #define CAM_PIN_RESET -1 // software reset will be performed
-#define CAM_PIN_XCLK
-#define CAM_PIN_SIOD
-#define CAM_PIN_SIOC
-
-#define CAM_PIN_D7
-#define CAM_PIN_D6
-#define CAM_PIN_D5
-#define CAM_PIN_D4
-#define CAM_PIN_D3
-#define CAM_PIN_D2
-#define CAM_PIN_D1
-#define CAM_PIN_D0
-#define CAM_PIN_VSYNC
-#define CAM_PIN_HREF
-#define CAM_PIN_PCLK
+#define CAM_PIN_XCLK 18
+#define CAM_PIN_SIOD 5
+#define CAM_PIN_SIOC 4
+#define CAM_PIN_D7 36
+#define CAM_PIN_D6 39
+#define CAM_PIN_D5 34
+#define CAM_PIN_D4 35
+#define CAM_PIN_D3 32
+#define CAM_PIN_D2 33
+#define CAM_PIN_D1 25
+#define CAM_PIN_D0 26
+#define CAM_PIN_VSYNC 13
+#define CAM_PIN_HREF 23
+#define CAM_PIN_PCLK 19
+#define CONFIG_XCLK_FREQ 20000000
+#define PART_BOUNDARY "123456789000000000000987654321"
 
 #define MICROSTEP 1
 #define MAX_STEP 4096
@@ -111,6 +113,10 @@
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + CONFIG_SPIFFS_OBJ_NAME_LEN)
 #define SCRATCH_BUFSIZE 8192
 
+static const char *_STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" PART_BOUNDARY;
+static const char *_STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
+static const char *_STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n";
+
 void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt);
 uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt);
 void BME280_delay_msek(u32 msek);
@@ -122,6 +128,7 @@ struct file_server_data
 };
 struct bme280_t bme280;
 ads1115_t ads1115_cfg;
+camera_config_t camera_config;
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
@@ -446,6 +453,81 @@ static esp_err_t root_sensors_handler(httpd_req_t *req)
         cJSON_Delete(resp);
         free(buff);
     }
+    else if (strcasecmp((char *)req->uri, "/sensors/Camera") == 0)
+    {
+        camera_fb_t *fb = NULL;
+        esp_err_t res = ESP_OK;
+        size_t _jpg_buf_len;
+        uint8_t *_jpg_buf;
+        char *part_buf[64];
+        static int64_t last_frame = 0;
+        if (!last_frame)
+        {
+            last_frame = esp_timer_get_time();
+        }
+
+        res = httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
+        if (res != ESP_OK)
+        {
+            return res;
+        }
+        while (true)
+        {
+            fb = esp_camera_fb_get();
+            if (!fb)
+            {
+                ESP_LOGI(TAG, "Camera capture failed");
+                res = ESP_FAIL;
+                break;
+            }
+            if (fb->format != PIXFORMAT_JPEG)
+            {
+                bool jpeg_converted = frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
+                if (!jpeg_converted)
+                {
+                    ESP_LOGI(TAG, "JPEG compression failed");
+                    esp_camera_fb_return(fb);
+                    res = ESP_FAIL;
+                }
+            }
+            else
+            {
+                _jpg_buf_len = fb->len;
+                _jpg_buf = fb->buf;
+            }
+
+            if (res == ESP_OK)
+            {
+                res = httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY));
+            }
+            if (res == ESP_OK)
+            {
+                size_t hlen = snprintf((char *)part_buf, 64, _STREAM_PART, _jpg_buf_len);
+
+                res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
+            }
+            if (res == ESP_OK)
+            {
+                res = httpd_resp_send_chunk(req, (const char *)_jpg_buf, _jpg_buf_len);
+            }
+            if (fb->format != PIXFORMAT_JPEG)
+            {
+                free(_jpg_buf);
+            }
+            esp_camera_fb_return(fb);
+            if (res != ESP_OK)
+            {
+                break;
+            }
+            int64_t fr_end = esp_timer_get_time();
+            int64_t frame_time = fr_end - last_frame;
+            last_frame = fr_end;
+            frame_time /= 1000;
+            ESP_LOGI(TAG, "MJPG: %uKB %ums (%.1ffps)", (uint32_t)(_jpg_buf_len / 1024), (uint32_t)frame_time, 1000.0 / (uint32_t)frame_time);
+        }
+        last_frame = 0;
+        return res;
+    }
     return ESP_OK;
 }
 
@@ -682,8 +764,48 @@ esp_err_t web_server()
     return ESP_OK;
 }
 
+static esp_err_t init_camera(void)
+{
+    camera_config.pin_pwdn = CAM_PIN_PWDN;
+    camera_config.pin_reset = CAM_PIN_RESET;
+    camera_config.pin_xclk = CAM_PIN_XCLK;
+    camera_config.pin_sccb_sda = CAM_PIN_SIOD;
+    camera_config.pin_sccb_scl = CAM_PIN_SIOC;
+
+    camera_config.pin_d7 = CAM_PIN_D7;
+    camera_config.pin_d6 = CAM_PIN_D6;
+    camera_config.pin_d5 = CAM_PIN_D5;
+    camera_config.pin_d4 = CAM_PIN_D4;
+    camera_config.pin_d3 = CAM_PIN_D3;
+    camera_config.pin_d2 = CAM_PIN_D2;
+    camera_config.pin_d1 = CAM_PIN_D1;
+    camera_config.pin_d0 = CAM_PIN_D0;
+    camera_config.pin_vsync = CAM_PIN_VSYNC;
+    camera_config.pin_href = CAM_PIN_HREF;
+    camera_config.pin_pclk = CAM_PIN_PCLK;
+
+    camera_config.xclk_freq_hz = CONFIG_XCLK_FREQ;
+    camera_config.ledc_timer = LEDC_TIMER_0;
+    camera_config.ledc_channel = LEDC_CHANNEL_0;
+
+    camera_config.pixel_format = PIXFORMAT_JPEG;
+    camera_config.frame_size = FRAMESIZE_VGA;
+
+    camera_config.jpeg_quality = 12;
+    camera_config.fb_count = 1;
+    camera_config.grab_mode = CAMERA_GRAB_WHEN_EMPTY; // CAMERA_GRAB_LATEST. Sets when buffers should be filled
+    esp_err_t err = esp_camera_init(&camera_config);
+    if (err != ESP_OK)
+    {
+        return err;
+    }
+    return ESP_OK;
+}
+
 void peripherical_init()
 {
+    esp_err_t err;
+
     ledc_timer_config_t ledc_timer = {
         .duty_resolution = LEDC_TIMER_10_BIT,
         .freq_hz = 50,
@@ -784,6 +906,8 @@ void peripherical_init()
                           ADS1115_CFG_MS_MODE_SS;
     ads1115_cfg.dev_addr = 0x48;
     ADS1115_initiate(&ads1115_cfg);
+
+    err = init_camera();
 }
 
 void BME280_delay_msek(u32 msek)
