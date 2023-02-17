@@ -9,7 +9,8 @@ INCLUDE_DIRS
 EMBED_TXTFILES 
     "page.html" 
     "assets/code.js" 
-    "assets/style.css" 
+    "assets/style.css"
+    "assets/unavailable.jpeg"
     "assets/Fortron.png" 
     "assets/trator.gif" 
     "assets/F.ico" 

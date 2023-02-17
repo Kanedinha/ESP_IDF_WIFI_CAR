@@ -27,7 +27,9 @@
         "ledc.h": "c",
         "iot_servo.h": "c",
         "esp_http_server.h": "c",
-        "functional": "c"
+        "functional": "c",
+        "condition_variable": "c",
+        "future": "c"
     }
 }
  

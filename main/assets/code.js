@@ -188,6 +188,7 @@ function direction_send() {
     });
 }
 
+
 $("body").ready(function () {
 
     // Funciona mas trocar por requisição GET
@@ -234,17 +235,18 @@ $("body").ready(function () {
         });
     }, 1000);
 
-    CAM = setInterval(function () {
         $.ajax({
             type: "GET",
             url: "/sensors/Camera",
             success: function (result) {
-                VideoImage = jQuery.parseJSON(result);
-                // $("#battery").html('<p class="text">Battery: ' + (Sensor.BatLvL / 5 * 100).toFixed(2) + '% </p>');
+                // const url = window.URL || window.webkitURL;
+                // const src = url.createObjectURL(data);
+                $("#CAM").attr('src', result);
+                alert(result);
             },
             error: function (result) {
                 alert('CAM Error');
             }
         });
-    }, 1);
+
 });

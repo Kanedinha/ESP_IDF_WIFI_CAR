@@ -67,7 +67,7 @@
 #define CAM_PIN_VSYNC 13
 #define CAM_PIN_HREF 23
 #define CAM_PIN_PCLK 19
-#define CONFIG_XCLK_FREQ 20000000
+#define CONFIG_XCLK_FREQ 10000000
 #define PART_BOUNDARY "123456789000000000000987654321"
 
 #define MICROSTEP 1
@@ -334,6 +334,14 @@ static esp_err_t root_assets_handler(httpd_req_t *req)
         httpd_resp_send(req, (char *)Fortron_start, Fortron_end - Fortron_start - 1);
         ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
     }
+    else if (strcasecmp((char *)req->uri, "/assets/unavailable.jpeg") == 0)
+    {
+        extern const uint8_t unavailable_start[] asm("_binary_unavailable_jpeg_start"); // uint8_t
+        extern const uint8_t unavailable_end[] asm("_binary_unavailable_jpeg_end");     // uint8_t
+        set_content_type_from_file(req, (char *)req->uri);
+        httpd_resp_send(req, (char *)unavailable_start, unavailable_end - unavailable_start - 1);
+        ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
+    }
     else if (strcasecmp((char *)req->uri, "/assets/trator.gif") == 0)
     {
         extern const uint8_t trator_start[] asm("_binary_trator_gif_start"); // uint8_t
@@ -471,14 +479,23 @@ static esp_err_t root_sensors_handler(httpd_req_t *req)
         {
             return res;
         }
-        while (true)
+
+        /*
+         * #define PART_BOUNDARY "123456789000000000000987654321"
+         * static const char *_STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" PART_BOUNDARY;
+         * static const char *_STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
+         * static const char *_STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n";
+         */
+        while (1)
         {
             fb = esp_camera_fb_get();
+            ESP_LOGI(TAG, "FB GET");
             if (!fb)
             {
                 ESP_LOGI(TAG, "Camera capture failed");
                 res = ESP_FAIL;
-                break;
+
+                return res;
             }
             if (fb->format != PIXFORMAT_JPEG)
             {
@@ -502,13 +519,16 @@ static esp_err_t root_sensors_handler(httpd_req_t *req)
             }
             if (res == ESP_OK)
             {
+                ESP_LOGI(TAG, "BOUNDARY SEND");
                 size_t hlen = snprintf((char *)part_buf, 64, _STREAM_PART, _jpg_buf_len);
 
                 res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
             }
             if (res == ESP_OK)
             {
+                ESP_LOGI(TAG, "PART BUFF SEND");
                 res = httpd_resp_send_chunk(req, (const char *)_jpg_buf, _jpg_buf_len);
+                ESP_LOGI(TAG, "jpg BUFF SEND");
             }
             if (fb->format != PIXFORMAT_JPEG)
             {
@@ -517,13 +537,13 @@ static esp_err_t root_sensors_handler(httpd_req_t *req)
             esp_camera_fb_return(fb);
             if (res != ESP_OK)
             {
-                break;
+                return res;
             }
             int64_t fr_end = esp_timer_get_time();
             int64_t frame_time = fr_end - last_frame;
             last_frame = fr_end;
             frame_time /= 1000;
-            ESP_LOGI(TAG, "MJPG: %uKB %ums (%.1ffps)", (uint32_t)(_jpg_buf_len / 1024), (uint32_t)frame_time, 1000.0 / (uint32_t)frame_time);
+            ESP_LOGI(TAG, "MJPG: %lu KB %lu ms (%.1ffps)", (uint32_t)(_jpg_buf_len / 1024), (uint32_t)frame_time, 1000.0 / (uint32_t)frame_time);
         }
         last_frame = 0;
         return res;
@@ -647,7 +667,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         {
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
-        ESP_LOGI(TAG, "connect to the AP fail");
+        ESP_LOGE(TAG, "connect to the AP fail");
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
     {
@@ -752,7 +772,7 @@ esp_err_t web_server()
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &config) != ESP_OK)
     {
-        ESP_LOGI(TAG, "WEB Server failed !!!\n");
+        ESP_LOGE(TAG, "WEB Server failed !!!\n");
         return ESP_FAIL;
     }
     ESP_LOGI(TAG, "WEB Server initialized sus !!!\n");
@@ -788,7 +808,7 @@ static esp_err_t init_camera(void)
     camera_config.ledc_timer = LEDC_TIMER_0;
     camera_config.ledc_channel = LEDC_CHANNEL_0;
 
-    camera_config.pixel_format = PIXFORMAT_JPEG;
+    camera_config.pixel_format = PIXFORMAT_GRAYSCALE;
     camera_config.frame_size = FRAMESIZE_VGA;
 
     camera_config.jpeg_quality = 12;
@@ -815,8 +835,9 @@ void peripherical_init()
     };
 
     if (ledc_timer_config(&ledc_timer) != ESP_OK)
-        ESP_LOGI(TAG, "Timer ERROR !!!");
-    ESP_LOGI(TAG, "Timer init OK!");
+        ESP_LOGE(TAG, "Timer ERROR !!!");
+    else
+        ESP_LOGI(TAG, "Timer init OK!");
 
     ledc_channel.channel = LEDC_CHANNEL_0;
     ledc_channel.duty = 0;
@@ -826,8 +847,9 @@ void peripherical_init()
     ledc_channel.timer_sel = LEDC_TIMER_0;
 
     if (ledc_channel_config(&ledc_channel) != ESP_OK)
-        ESP_LOGI(TAG, "PWM ERROR !!!");
-    ESP_LOGI(TAG, "PWM init OK!");
+        ESP_LOGE(TAG, "PWM ERROR !!!");
+    else
+        ESP_LOGI(TAG, "PWM init OK!");
 
     // servo_config_t servo_cfg = {
     //     .max_angle = 180,
@@ -890,13 +912,9 @@ void peripherical_init()
     com_rslt += bme280_set_power_mode(BME280_NORMAL_MODE);
     ESP_LOGI(TAG, "bme pwr mode: %d", com_rslt);
     if (com_rslt == SUCCESS)
-    {
         ESP_LOGI(TAG, "BME280 init!");
-    }
     else
-    {
-        ESP_LOGI(TAG, "BME280 ERROR !!!");
-    }
+        ESP_LOGE(TAG, "BME280 ERROR !!!");
 
     ads1115_cfg.reg_cfg = ADS1115_CFG_LS_COMP_MODE_TRAD | // Comparator is traditional
                           ADS1115_CFG_LS_COMP_LAT_NON |   // Comparator is non-latching
@@ -907,7 +925,10 @@ void peripherical_init()
     ads1115_cfg.dev_addr = 0x48;
     ADS1115_initiate(&ads1115_cfg);
 
-    err = init_camera();
+    if (init_camera() != ESP_OK)
+        ESP_LOGE(TAG, "camera init ERROR !!!");
+    else
+        ESP_LOGI(TAG, "camera init success");
 }
 
 void BME280_delay_msek(u32 msek)
