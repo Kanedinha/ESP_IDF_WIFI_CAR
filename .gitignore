@@ -4,4 +4,4 @@ node_modules/**
 .devcontainer/Dockerfile
 package-lock.json
 package.json
-
+espressif__mdns/**
