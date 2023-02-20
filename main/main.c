@@ -15,6 +15,7 @@
 #include "esp_flash.h"
 #include "esp_system.h"
 #include <esp_wifi.h>
+#include "mdns.h"
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "esp_log.h"
@@ -121,11 +122,19 @@ void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cn
 uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt);
 void BME280_delay_msek(u32 msek);
 
+httpd_handle_t server = NULL;
+struct async_resp_arg
+{
+    httpd_handle_t hd;
+    int fd;
+};
+
 struct file_server_data
 {
     char base_path[ESP_VFS_PATH_MAX + 1];
     char scratch[SCRATCH_BUFSIZE];
 };
+
 struct bme280_t bme280;
 ads1115_t ads1115_cfg;
 camera_config_t camera_config;
@@ -461,93 +470,123 @@ static esp_err_t root_sensors_handler(httpd_req_t *req)
         cJSON_Delete(resp);
         free(buff);
     }
-    else if (strcasecmp((char *)req->uri, "/sensors/Camera") == 0)
+    return ESP_OK;
+}
+
+static void initialise_mdns(void)
+{
+    // char* hostname = generate_hostname();
+    char hostname[] = "experimento_kanedistico";
+    // initialize mDNS
+    ESP_ERROR_CHECK(mdns_init());
+    // set mDNS hostname (required if you want to advertise services)
+    ESP_ERROR_CHECK(mdns_hostname_set(hostname));
+    ESP_LOGI(TAG, "mdns hostname set to: [%s]", hostname);
+    // set default mDNS instance name
+    ESP_ERROR_CHECK(mdns_instance_name_set("teste 金田"));
+
+    mdns_service_add("Interface WEB 金田", "_http", "_tcp", 80, NULL, 0);
+}
+
+static void ws_async_send(void *arg)
+{
+    camera_fb_t *fb = NULL;
+    esp_err_t res = ESP_OK;
+    char part_buf[64];
+    static int64_t last_frame = 0;
+    httpd_ws_frame_t ws_pkt;
+    struct async_resp_arg *resp_arg = arg;
+    httpd_handle_t hd = resp_arg->hd;
+    int fd = resp_arg->fd;
+
+    //ESP_LOGI(TAG, "Request type: %d - len:%d", (int8_t)arg->method, (int8_t)->content_len);
+    if (!last_frame)
     {
-        camera_fb_t *fb = NULL;
-        esp_err_t res = ESP_OK;
-        size_t _jpg_buf_len;
-        uint8_t *_jpg_buf;
-        char *part_buf[64];
-        static int64_t last_frame = 0;
-        if (!last_frame)
-        {
-            last_frame = esp_timer_get_time();
-        }
-
-        res = httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
-        if (res != ESP_OK)
-        {
-            return res;
-        }
-
-        /*
-         * #define PART_BOUNDARY "123456789000000000000987654321"
-         * static const char *_STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" PART_BOUNDARY;
-         * static const char *_STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
-         * static const char *_STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n";
-         */
-        while (1)
-        {
-            fb = esp_camera_fb_get();
-            ESP_LOGI(TAG, "FB GET");
-            if (!fb)
-            {
-                ESP_LOGI(TAG, "Camera capture failed");
-                res = ESP_FAIL;
-
-                return res;
-            }
-            if (fb->format != PIXFORMAT_JPEG)
-            {
-                bool jpeg_converted = frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
-                if (!jpeg_converted)
-                {
-                    ESP_LOGI(TAG, "JPEG compression failed");
-                    esp_camera_fb_return(fb);
-                    res = ESP_FAIL;
-                }
-            }
-            else
-            {
-                _jpg_buf_len = fb->len;
-                _jpg_buf = fb->buf;
-            }
-
-            if (res == ESP_OK)
-            {
-                res = httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY));
-            }
-            if (res == ESP_OK)
-            {
-                ESP_LOGI(TAG, "BOUNDARY SEND");
-                size_t hlen = snprintf((char *)part_buf, 64, _STREAM_PART, _jpg_buf_len);
-
-                res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
-            }
-            if (res == ESP_OK)
-            {
-                ESP_LOGI(TAG, "PART BUFF SEND");
-                res = httpd_resp_send_chunk(req, (const char *)_jpg_buf, _jpg_buf_len);
-                ESP_LOGI(TAG, "jpg BUFF SEND");
-            }
-            if (fb->format != PIXFORMAT_JPEG)
-            {
-                free(_jpg_buf);
-            }
-            esp_camera_fb_return(fb);
-            if (res != ESP_OK)
-            {
-                return res;
-            }
-            int64_t fr_end = esp_timer_get_time();
-            int64_t frame_time = fr_end - last_frame;
-            last_frame = fr_end;
-            frame_time /= 1000;
-            ESP_LOGI(TAG, "MJPG: %lu KB %lu ms (%.1ffps)", (uint32_t)(_jpg_buf_len / 1024), (uint32_t)frame_time, 1000.0 / (uint32_t)frame_time);
-        }
-        last_frame = 0;
-        return res;
+        last_frame = esp_timer_get_time();
     }
+
+    res = httpd_resp_set_type(arg, _STREAM_CONTENT_TYPE);
+    if (res != ESP_OK)
+    {
+        return;
+    }
+    fb = esp_camera_fb_get();
+    ESP_LOGI(TAG, "FB GET");
+    if (!fb)
+    {
+        ESP_LOGE(TAG, "Camera capture failed");
+        res = ESP_FAIL;
+
+        return;
+    }
+
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    memset(part_buf, 0, sizeof(part_buf));
+
+    ws_pkt.payload = (uint8_t *)part_buf;
+    ws_pkt.len = strlen(part_buf);
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+    
+    static size_t max_clients = CONFIG_LWIP_MAX_LISTENING_TCP;
+    size_t fds = max_clients;
+    int client_fds[max_clients];
+
+    esp_err_t ret = httpd_get_client_list(server, &fds, client_fds);
+
+    if (ret != ESP_OK) {
+        return;
+    }
+
+    for (int i = 0; i < fds; i++) {
+        int client_info = httpd_ws_get_fd_info(server, client_fds[i]);
+        if (client_info == HTTPD_WS_CLIENT_WEBSOCKET) {
+            httpd_ws_send_frame_async(hd, client_fds[i], &ws_pkt);
+        }
+    }
+    free(resp_arg);
+}
+
+static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req)
+{
+    struct async_resp_arg *resp_arg = malloc(sizeof(struct async_resp_arg));
+    resp_arg->hd = req->handle;
+    resp_arg->fd = httpd_req_to_sockfd(req);
+    return httpd_queue_work(handle, ws_async_send, resp_arg);
+}
+
+static esp_err_t ws_handler(httpd_req_t *req)
+{
+    uint8_t buf[128] = {0};
+    httpd_ws_frame_t ws_pkt;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ESP_LOGI(TAG, "Request type: %d - len:%d", req->method, req->content_len);
+    if (req->content_len > 0)
+    {
+        ws_pkt.payload = buf;
+        ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+        esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 128);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
+            return ESP_OK;
+        }
+        ESP_LOGI(TAG, "Got packet with message: %s", ws_pkt.payload);
+        ESP_LOGI(TAG, "Packet type: %d", ws_pkt.type);
+        if (ws_pkt.type == HTTPD_WS_TYPE_TEXT &&
+            strcmp((char *)ws_pkt.payload, "Trigger async") == 0)
+        {
+            return trigger_async_send(req->handle, req);
+        }
+
+        ret = httpd_ws_send_frame(req, &ws_pkt);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "httpd_ws_send_frame failed with %d", ret);
+        }
+
+        ret = httpd_ws_send_frame(req, &ws_pkt);
+    }
+
     return ESP_OK;
 }
 
@@ -682,25 +721,37 @@ httpd_uri_t direction_uri = {
     .uri = "/direction",
     .method = HTTP_POST,
     .handler = direction_handler,
-    .user_ctx = NULL};
+    .user_ctx = NULL,
+};
 
 httpd_uri_t root_uri = {
     .uri = "/",
     .method = HTTP_GET,
     .handler = root_handler,
-    .user_ctx = NULL};
+    .user_ctx = NULL,
+};
 
 httpd_uri_t root_assets_uri = {
     .uri = "/assets/*",
     .method = HTTP_GET,
     .handler = root_assets_handler,
-    .user_ctx = NULL};
+    .user_ctx = NULL,
+};
 
 httpd_uri_t root_sensors_uri = {
     .uri = "/sensors/*",
     .method = HTTP_GET,
     .handler = root_sensors_handler,
-    .user_ctx = NULL};
+    .user_ctx = NULL,
+};
+
+httpd_uri_t root_ws_start_uri = {
+    .uri = "/ws",
+    .method = HTTP_GET,
+    .handler = ws_handler,
+    .user_ctx = NULL,
+    .is_websocket = true,
+};
 
 esp_err_t wifi_init(void)
 {
@@ -781,6 +832,7 @@ esp_err_t web_server()
     httpd_register_uri_handler(server, &root_assets_uri);
     httpd_register_uri_handler(server, &direction_uri);
     httpd_register_uri_handler(server, &root_uri);
+    httpd_register_uri_handler(server, &root_ws_start_uri);
     return ESP_OK;
 }
 
@@ -997,15 +1049,16 @@ void app_main()
     ret = wifi_init();
     if (ret != ESP_OK)
     {
-        ESP_LOGI(TAG, "Wifi init ERROR !!!\n");
+        ESP_LOGE(TAG, "Wifi init ERROR !!!\n");
     }
     ESP_LOGI(TAG, "ESP_WIFI_INIT\n");
     ESP_ERROR_CHECK(ret);
 
+    initialise_mdns();
     ret = web_server();
     if (ret != ESP_OK)
     {
-        ESP_LOGI(TAG, "web server ERROR !!!\n");
+        ESP_LOGE(TAG, "web server ERROR !!!\n");
     }
     ESP_LOGI(TAG, "DALE\n");
     ESP_ERROR_CHECK(ret);

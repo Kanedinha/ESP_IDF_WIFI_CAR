@@ -1,13 +1,20 @@
 var speed = 0;
 var dir = 0;
 var up = 0;
+
 var MAX_STEP = 50;
+
 var Sensor;
+
 var readBattery = 0;
 var readTemperature = 0;
 var readSpeed = 0;
+
 var timeout = 80;
-var motion = null;
+
+var myWebSocket;
+var image_data = "";
+var start_time = 0;
 
 // ---------------- ~1 degree --------------------//
 $("#direita1").mousedown(function () {
@@ -235,18 +242,86 @@ $("body").ready(function () {
         });
     }, 1000);
 
-        $.ajax({
-            type: "GET",
-            url: "/sensors/Camera",
-            success: function (result) {
-                // const url = window.URL || window.webkitURL;
-                // const src = url.createObjectURL(data);
-                $("#CAM").attr('src', result);
-                alert(result);
-            },
-            error: function (result) {
-                alert('CAM Error');
-            }
-        });
+    
 
 });
+
+function connectToWS() {
+
+    var endpoint = "ws://experimento_kanedistico.local/ws";
+    if (myWebSocket !== undefined) {
+        myWebSocket.close()
+    }
+
+    myWebSocket = new WebSocket(endpoint);
+    myWebSocket.binaryType = "arraybuffer";
+
+    myWebSocket.onmessage = function (event) {
+        var leng;
+        if (event.data instanceof ArrayBuffer) {
+            
+            // incoming data is binary
+            console.log("Received binary data" + event.data.size + " bytes");
+            event.data.type = 'image/bmp';
+            //var blob = new Blob([event.data], { type: 'image/bmp' });
+            var blob = new Blob([event.data], { type: 'image/png' });
+            const imageUrl = URL.createObjectURL(blob);
+            document.getElementById("wsimg").src = imageUrl;
+
+            // do something with the ArrayBuffer
+        } else {
+            // incoming data is text
+            console.log("Received text data");
+            // do something with the text data
+        }
+
+        /*payload = JSON.parse(event.data);
+
+        if (payload['type'] === 'image') {
+            if (payload['last_chunk']) {
+                document.getElementById("wsimg").src = "data:image/bmp;base64," + image_data;
+                image_data = "";
+                var delta = (new Date()) - start_time;
+                var fps = 1000 / delta;
+                document.getElementById("fps").innerHTML = "FPS: " + fps.toFixed(2);
+                var Bps = (payload['offset'] + payload['data_chunk'].length) / delta;
+                document.getElementById("Bps").innerHTML = "Bps: " + Bps.toFixed(2);
+                
+            } else {
+                if (payload['offset'] === 0) {
+                    start_time = new Date();
+                    image_data = payload['data_chunk'];
+                }
+                else {
+                    image_data += payload['data_chunk'];
+                }
+                delete payload['msg'];
+
+            }
+
+        }
+        if (payload['msg']) {
+            console.log("onmessage. size: " + leng + ", content: " + payload['msg']);
+            let endpoint = document.getElementById("myMessage").value;
+            var newLine = "\r\n";
+            document.getElementById("myMessage").value = endpoint + payload['msg'];
+            var textarea = document.getElementById('myMessage');
+            textarea.scrollTop = textarea.scrollHeight;
+        }
+        */
+
+    }
+
+    myWebSocket.onopen = function (evt) {
+        console.log("onopen.");
+        document.getElementById("myMessage").value = "";
+    };
+
+    myWebSocket.onclose = function (evt) {
+        console.log("onclose.");
+    };
+
+    myWebSocket.onerror = function (evt) {
+        console.log("Error!");
+    };
+}
