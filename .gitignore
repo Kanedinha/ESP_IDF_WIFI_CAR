@@ -1,7 +1,9 @@
 build/**
 node_modules/**
+managed_components/**
 .devcontainer/devcontainer.json
 .devcontainer/Dockerfile
 package-lock.json
 package.json
 espressif__mdns/**
+dependencies.lock
