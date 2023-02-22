@@ -29,7 +29,9 @@
         "esp_http_server.h": "c",
         "functional": "c",
         "condition_variable": "c",
-        "future": "c"
+        "future": "c",
+        "esp_camera.h": "c",
+        "sensor.h": "c"
     }
 }
  

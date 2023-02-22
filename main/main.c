@@ -4,6 +4,7 @@
 #include <sys/param.h>
 #include <sys/unistd.h>
 #include <sys/stat.h>
+#include "sys/socket.h"
 #include <dirent.h>
 
 #include <rom/ets_sys.h>
@@ -13,6 +14,7 @@
 #include <esp_rom_gpio.h>
 #include "esp_chip_info.h"
 #include "esp_flash.h"
+#include "esp_heap_caps.h"
 #include "esp_system.h"
 #include <esp_wifi.h>
 #include "mdns.h"
@@ -68,8 +70,10 @@
 #define CAM_PIN_VSYNC 13
 #define CAM_PIN_HREF 23
 #define CAM_PIN_PCLK 19
-#define CONFIG_XCLK_FREQ 10000000
+#define CONFIG_XCLK_FREQ 2500000
 #define PART_BOUNDARY "123456789000000000000987654321"
+
+#define MAX_WEB_SOCKETS 2
 
 #define MICROSTEP 1
 #define MAX_STEP 4096
@@ -122,12 +126,32 @@ void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cn
 uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt);
 void BME280_delay_msek(u32 msek);
 
+static QueueHandle_t out_msg_queue;
+static QueueHandle_t incoming_client_events;
+SemaphoreHandle_t new_client_semaphore;
+int list_of_sockets[MAX_WEB_SOCKETS];
+
 httpd_handle_t server = NULL;
 struct async_resp_arg
 {
     httpd_handle_t hd;
     int fd;
 };
+
+typedef struct
+{
+    int socket_fd;
+    int last_socket_fd;
+    void *data_ptr;
+
+} cb_socket_args_t;
+
+typedef struct
+{
+    uint16_t type;
+    uint16_t x;
+    uint16_t y;
+} __attribute__((packed)) client_event_t;
 
 struct file_server_data
 {
@@ -488,61 +512,142 @@ static void initialise_mdns(void)
     mdns_service_add("Interface WEB 金田", "_http", "_tcp", 80, NULL, 0);
 }
 
+void last_frame_callback(esp_err_t err, int socket, void *arg)
+{
+    cb_socket_args_t *cb_args = (cb_socket_args_t *)arg;
+    if (cb_args->socket_fd == cb_args->last_socket_fd)
+    {
+        heap_caps_free(cb_args->data_ptr);
+    }
+    free(arg);
+}
+
+void img_stream(void *args)
+{
+    // camera_fb_t *fb = NULL;
+    // httpd_ws_frame_t ws_pkt;
+    uint8_t *data;
+
+    while (1)
+    {
+        // if (xQueueReceive(out_msg_queue, &data, portMAX_DELAY) == pdTRUE)
+        {
+            uint8_t n_clients = 0;
+
+            camera_fb_t *fb = NULL;
+            fb = esp_camera_fb_get();
+
+            if (!fb)
+            {
+                ESP_LOGE(TAG, "Camera capture failed");
+                vTaskDelay(500);
+                continue;
+            }
+            else
+            {
+                ESP_LOGI(TAG, "Capture success");
+            }
+
+            httpd_ws_frame_t ws_pkt;
+            memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+
+            ws_pkt.payload = fb->buf;
+            ws_pkt.len = fb->len;
+            ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+
+            // static size_t max_clients = CONFIG_LWIP_MAX_LISTENING_TCP;
+            // size_t fds = max_clients;
+            // int client_fds[max_clients];
+
+            // esp_err_t ret = httpd_get_client_list(server, &fds, client_fds);
+
+            // if (ret != ESP_OK)
+            // {
+            //     ESP_LOGE(TAG, "Failed to get client list!");
+            // }
+            // print_memory_usage();
+
+            int last_socket_id = -1;
+            for (int i = 0; i < MAX_WEB_SOCKETS; i++)
+            {
+                int fd = list_of_sockets[i];
+                ESP_LOGI(TAG, "socket:%d  number:%d", fd, i);
+                if (fd != 0)
+                {
+                    httpd_ws_client_info_t info = httpd_ws_get_fd_info(server, fd);
+                    ESP_LOGI(TAG, " info:%d", info);
+                    if (info == HTTPD_WS_CLIENT_WEBSOCKET)
+                    {
+                        last_socket_id = fd;
+                    }
+                }
+            }
+            ESP_LOGI(TAG, "last_socket_id:%d", last_socket_id);
+
+            for (int i = 0; i < MAX_WEB_SOCKETS; i++)
+            {
+                int fd = list_of_sockets[i];
+
+                if (fd != 0)
+                {
+                    httpd_ws_client_info_t info = httpd_ws_get_fd_info(server, fd);
+                    ESP_LOGI(TAG, " info:%d", info);
+                    if (info == HTTPD_WS_CLIENT_WEBSOCKET)
+                    {
+                        cb_socket_args_t *args = malloc(sizeof(cb_socket_args_t));
+                        args->socket_fd = fd;
+                        args->last_socket_fd = last_socket_id;
+                        args->data_ptr = ws_pkt.payload;
+
+                        // httpd_ws_send_frame_async(server, fd, &ws_pkt);
+
+                        ESP_LOGI(TAG, "Sending %d bytes to client %d x:%d y:%d", ws_pkt.len, i, fb->width, fb->height);
+                        esp_err_t err = httpd_ws_send_data_async(server, fd, &ws_pkt, &last_frame_callback, args);
+                        if (err != ESP_OK)
+                        {
+                            for (int i = 0; i < 10; i++)
+                            {
+                                ESP_LOGE(TAG, "Error sending frame to client %d", i);
+                            }
+
+                            if (fd == last_socket_id)
+                            {
+                                ESP_LOGE(TAG, "Last socket, freeing data");
+                                free(args);
+                                esp_camera_fb_return(fb);
+                            }
+                        }
+                        else
+                        {
+                            // ESP_LOGI(TAG, "%d bytes sent to client %d", ws_pkt.len, i);
+                            n_clients++;
+                        }
+                    }
+                }
+            }
+            if (n_clients == 0)
+            {
+                esp_camera_fb_return(fb);
+                ESP_LOGI(TAG, "No clients connected");
+            }
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+    }
+}
+
 static void ws_async_send(void *arg)
 {
-    camera_fb_t *fb = NULL;
-    esp_err_t res = ESP_OK;
-    char part_buf[64];
-    static int64_t last_frame = 0;
-    httpd_ws_frame_t ws_pkt;
+    static const char *data = "Async data";
     struct async_resp_arg *resp_arg = arg;
     httpd_handle_t hd = resp_arg->hd;
     int fd = resp_arg->fd;
-
-    //ESP_LOGI(TAG, "Request type: %d - len:%d", (int8_t)arg->method, (int8_t)->content_len);
-    if (!last_frame)
-    {
-        last_frame = esp_timer_get_time();
-    }
-
-    res = httpd_resp_set_type(arg, _STREAM_CONTENT_TYPE);
-    if (res != ESP_OK)
-    {
-        return;
-    }
-    fb = esp_camera_fb_get();
-    ESP_LOGI(TAG, "FB GET");
-    if (!fb)
-    {
-        ESP_LOGE(TAG, "Camera capture failed");
-        res = ESP_FAIL;
-
-        return;
-    }
-
+    httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    memset(part_buf, 0, sizeof(part_buf));
-
-    ws_pkt.payload = (uint8_t *)part_buf;
-    ws_pkt.len = strlen(part_buf);
+    ws_pkt.payload = (uint8_t *)data;
+    ws_pkt.len = strlen(data);
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-    
-    static size_t max_clients = CONFIG_LWIP_MAX_LISTENING_TCP;
-    size_t fds = max_clients;
-    int client_fds[max_clients];
 
-    esp_err_t ret = httpd_get_client_list(server, &fds, client_fds);
-
-    if (ret != ESP_OK) {
-        return;
-    }
-
-    for (int i = 0; i < fds; i++) {
-        int client_info = httpd_ws_get_fd_info(server, client_fds[i]);
-        if (client_info == HTTPD_WS_CLIENT_WEBSOCKET) {
-            httpd_ws_send_frame_async(hd, client_fds[i], &ws_pkt);
-        }
-    }
+    httpd_ws_send_frame_async(hd, fd, &ws_pkt);
     free(resp_arg);
 }
 
@@ -556,23 +661,39 @@ static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req)
 
 static esp_err_t ws_handler(httpd_req_t *req)
 {
-    uint8_t buf[128] = {0};
+    if (req->method == HTTP_GET)
+    {
+        ESP_LOGI(TAG, "Handshake done, the new connection was opened");
+        return ESP_OK;
+    }
+
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ESP_LOGI(TAG, "Request type: %d - len:%d", req->method, req->content_len);
     if (req->content_len > 0)
     {
-        ws_pkt.payload = buf;
-        ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-        esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 128);
+
+        ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+        esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
         if (ret != ESP_OK)
         {
             ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
             return ESP_OK;
         }
+
+        int buffer_len = ws_pkt.len + 1;
+        ws_pkt.payload = malloc(buffer_len);
+
+        ret = httpd_ws_recv_frame(req, &ws_pkt, buffer_len);
+        if (ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
+            return ESP_OK;
+        }
+
         ESP_LOGI(TAG, "Got packet with message: %s", ws_pkt.payload);
         ESP_LOGI(TAG, "Packet type: %d", ws_pkt.type);
-        if (ws_pkt.type == HTTPD_WS_TYPE_TEXT &&
+        if (ws_pkt.type == HTTPD_WS_TYPE_BINARY &&
             strcmp((char *)ws_pkt.payload, "Trigger async") == 0)
         {
             return trigger_async_send(req->handle, req);
@@ -586,9 +707,74 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
         ret = httpd_ws_send_frame(req, &ws_pkt);
     }
-
     return ESP_OK;
 }
+
+// esp_err_t jpg_stream_httpd_handler(httpd_req_t *req){
+//     camera_fb_t * fb = NULL;
+//     esp_err_t res = ESP_OK;
+//     size_t _jpg_buf_len;
+//     uint8_t * _jpg_buf;
+//     char * part_buf[64];
+//     static int64_t last_frame = 0;
+//     if(!last_frame) {
+//         last_frame = esp_timer_get_time();
+//     }
+
+//     res = httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
+//     if(res != ESP_OK){
+//         return res;
+//     }
+
+//     while(true){
+//         fb = esp_camera_fb_get();
+//         if (!fb) {
+//             ESP_LOGE(TAG, "Camera capture failed");
+//             res = ESP_FAIL;
+//             break;
+//         }
+//         if(fb->format != PIXFORMAT_JPEG){
+//             bool jpeg_converted = frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
+//             if(!jpeg_converted){
+//                 ESP_LOGE(TAG, "JPEG compression failed");
+//                 esp_camera_fb_return(fb);
+//                 res = ESP_FAIL;
+//             }
+//         } else {
+//             _jpg_buf_len = fb->len;
+//             _jpg_buf = fb->buf;
+//         }
+
+//         if(res == ESP_OK){
+//             res = httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY));
+//         }
+//         if(res == ESP_OK){
+//             size_t hlen = snprintf((char *)part_buf, 64, _STREAM_PART, _jpg_buf_len);
+
+//             res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
+//         }
+//         if(res == ESP_OK){
+//             res = httpd_resp_send_chunk(req, (const char *)_jpg_buf, _jpg_buf_len);
+//         }
+//         if(fb->format != PIXFORMAT_JPEG){
+//             free(_jpg_buf);
+//         }
+//         esp_camera_fb_return(fb);
+//         if(res != ESP_OK){
+//             break;
+//         }
+//         int64_t fr_end = esp_timer_get_time();
+//         int64_t frame_time = fr_end - last_frame;
+//         last_frame = fr_end;
+//         frame_time /= 1000;
+//         ESP_LOGI(TAG, "MJPG: %uKB %ums (%.1ffps)",
+//             (uint32_t)(_jpg_buf_len/1024),
+//             (uint32_t)frame_time, 1000.0 / (uint32_t)frame_time);
+//     }
+
+//     last_frame = 0;
+//     return res;
+// }
 
 static esp_err_t direction_handler(httpd_req_t *req)
 {
@@ -745,6 +931,13 @@ httpd_uri_t root_sensors_uri = {
     .user_ctx = NULL,
 };
 
+// httpd_uri_t root_sensors_uri = {
+//     .uri = "/camera",
+//     .method = HTTP_GET,
+//     .handler = jpg_stream_httpd_handler,
+//     .user_ctx = NULL,
+// };
+
 httpd_uri_t root_ws_start_uri = {
     .uri = "/ws",
     .method = HTTP_GET,
@@ -814,13 +1007,63 @@ esp_err_t wifi_init(void)
     return ESP_OK;
 }
 
+esp_err_t connection_open_cb(httpd_handle_t s_h, int sock)
+{
+    httpd_ws_client_info_t info = httpd_ws_get_fd_info(s_h, sock);
+    ESP_LOGI(TAG, "Socket %d has been opened info:%d", sock, info);
+
+    for (int i = 0; i < MAX_WEB_SOCKETS; i++)
+    {
+        if (list_of_sockets[i] == 0)
+        {
+            list_of_sockets[i] = sock;
+            xSemaphoreGive(new_client_semaphore);
+            return ESP_OK;
+        }
+    }
+
+    return ESP_FAIL;
+};
+
+void connection_close_cb(httpd_handle_t s_h, int sock)
+{
+    for (int i = 0; i < MAX_WEB_SOCKETS; i++)
+    {
+        if (list_of_sockets[i] == sock)
+        {
+            list_of_sockets[i] = 0;
+        }
+    }
+    ESP_LOGI(TAG, "Socket %d has been closed", sock);
+
+    struct linger so_linger;
+    so_linger.l_onoff = true;
+    so_linger.l_linger = 0;
+    int rv = setsockopt(sock, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger));
+    if (rv < 0)
+    {
+        ESP_LOGE(TAG, "lwip_setsockopt() failed. fd %d rv %d errno %d", sock, rv, errno);
+    }
+
+    rv = close(sock);
+    if (rv != 0)
+    {
+        ESP_LOGE(TAG, "close() fd (%d) failed. rv %d errno %d", sock, rv, errno);
+    }
+    close(sock);
+};
+
 esp_err_t web_server()
 {
-
+    memset(list_of_sockets, 0, sizeof(int)*MAX_WEB_SOCKETS);
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
+    config.max_open_sockets = 3;
+    config.open_fn = connection_open_cb;
+    config.close_fn = connection_close_cb;
+    config.lru_purge_enable = true;
 
-    httpd_handle_t server = NULL;
+    ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
     if (httpd_start(&server, &config) != ESP_OK)
     {
         ESP_LOGE(TAG, "WEB Server failed !!!\n");
@@ -852,7 +1095,7 @@ static esp_err_t init_camera(void)
     camera_config.pin_d2 = CAM_PIN_D2;
     camera_config.pin_d1 = CAM_PIN_D1;
     camera_config.pin_d0 = CAM_PIN_D0;
-    camera_config.pin_vsync = CAM_PIN_VSYNC;
+    camera_config.pin_vsync = 13;
     camera_config.pin_href = CAM_PIN_HREF;
     camera_config.pin_pclk = CAM_PIN_PCLK;
 
@@ -864,7 +1107,7 @@ static esp_err_t init_camera(void)
     camera_config.frame_size = FRAMESIZE_VGA;
 
     camera_config.jpeg_quality = 12;
-    camera_config.fb_count = 1;
+    camera_config.fb_count = 2;
     camera_config.grab_mode = CAMERA_GRAB_WHEN_EMPTY; // CAMERA_GRAB_LATEST. Sets when buffers should be filled
     esp_err_t err = esp_camera_init(&camera_config);
     if (err != ESP_OK)
@@ -1046,6 +1289,10 @@ void app_main()
     }
     ESP_ERROR_CHECK(ret);
 
+    out_msg_queue = xQueueCreate(100, sizeof(uint8_t *));
+    incoming_client_events = xQueueCreate(100, sizeof(client_event_t));
+    xTaskCreate(&img_stream, "img_stream", 4096, NULL, 5, NULL);
+
     ret = wifi_init();
     if (ret != ESP_OK)
     {
@@ -1063,8 +1310,12 @@ void app_main()
     ESP_LOGI(TAG, "DALE\n");
     ESP_ERROR_CHECK(ret);
 
+    new_client_semaphore = xSemaphoreCreateBinary();
+    xSemaphoreGive(new_client_semaphore);
+
+
     while (1)
     {
-        vTaskDelay(500);
+        vTaskDelay(2);
     }
 }
