@@ -31,7 +31,8 @@
         "condition_variable": "c",
         "future": "c",
         "esp_camera.h": "c",
-        "sensor.h": "c"
+        "sensor.h": "c",
+        "socket.h": "c"
     }
 }
  

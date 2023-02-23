@@ -27,6 +27,7 @@
 #include "esp_http_server.h"
 #include "esp_camera.h"
 #include <ff.h>
+#include "protocol_examples_common.h"
 
 #include "driver/i2c.h"
 #include "driver/ledc.h"
@@ -73,7 +74,7 @@
 #define CONFIG_XCLK_FREQ 2500000
 #define PART_BOUNDARY "123456789000000000000987654321"
 
-#define MAX_WEB_SOCKETS 2
+#define MAX_WEB_SOCKETS 6
 
 #define MICROSTEP 1
 #define MAX_STEP 4096
@@ -125,13 +126,14 @@ static const char *_STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %
 void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt);
 uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt);
 void BME280_delay_msek(u32 msek);
+static esp_err_t init_camera(void);
 
+static httpd_handle_t server = NULL;
 static QueueHandle_t out_msg_queue;
 static QueueHandle_t incoming_client_events;
 SemaphoreHandle_t new_client_semaphore;
 int list_of_sockets[MAX_WEB_SOCKETS];
 
-httpd_handle_t server = NULL;
 struct async_resp_arg
 {
     httpd_handle_t hd;
@@ -507,9 +509,9 @@ static void initialise_mdns(void)
     ESP_ERROR_CHECK(mdns_hostname_set(hostname));
     ESP_LOGI(TAG, "mdns hostname set to: [%s]", hostname);
     // set default mDNS instance name
-    ESP_ERROR_CHECK(mdns_instance_name_set("teste 金田"));
+    ESP_ERROR_CHECK(mdns_instance_name_set("teste"));
 
-    mdns_service_add("Interface WEB 金田", "_http", "_tcp", 80, NULL, 0);
+    mdns_service_add("Interface WEB", "_http", "_tcp", 80, NULL, 0);
 }
 
 void last_frame_callback(esp_err_t err, int socket, void *arg)
@@ -517,121 +519,113 @@ void last_frame_callback(esp_err_t err, int socket, void *arg)
     cb_socket_args_t *cb_args = (cb_socket_args_t *)arg;
     if (cb_args->socket_fd == cb_args->last_socket_fd)
     {
-        heap_caps_free(cb_args->data_ptr);
+        ESP_LOGI(TAG,"frame callback was ");
+        // heap_caps_free(cb_args->data_ptr);
     }
     free(arg);
 }
 
 void img_stream(void *args)
 {
-    // camera_fb_t *fb = NULL;
-    // httpd_ws_frame_t ws_pkt;
+    camera_fb_t *fb = NULL;
+    httpd_ws_frame_t ws_pkt;
     uint8_t *data;
-
+    uint8_t n_clients = 0;
     while (1)
     {
-        // if (xQueueReceive(out_msg_queue, &data, portMAX_DELAY) == pdTRUE)
+        n_clients = 0;
+
+        vTaskDelay(1000);
+        int last_socket_id = -1;
+        for (int i = 0; i < MAX_WEB_SOCKETS; i++)
         {
-            uint8_t n_clients = 0;
-
-            camera_fb_t *fb = NULL;
-            fb = esp_camera_fb_get();
-
-            if (!fb)
+            int fd = list_of_sockets[i];
+            ESP_LOGI(TAG, "socket:%d  number:%d", fd, i);
+            if (fd != 0)
             {
-                ESP_LOGE(TAG, "Camera capture failed");
-                vTaskDelay(500);
-                continue;
-            }
-            else
-            {
-                ESP_LOGI(TAG, "Capture success");
-            }
-
-            httpd_ws_frame_t ws_pkt;
-            memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-
-            ws_pkt.payload = fb->buf;
-            ws_pkt.len = fb->len;
-            ws_pkt.type = HTTPD_WS_TYPE_BINARY;
-
-            // static size_t max_clients = CONFIG_LWIP_MAX_LISTENING_TCP;
-            // size_t fds = max_clients;
-            // int client_fds[max_clients];
-
-            // esp_err_t ret = httpd_get_client_list(server, &fds, client_fds);
-
-            // if (ret != ESP_OK)
-            // {
-            //     ESP_LOGE(TAG, "Failed to get client list!");
-            // }
-            // print_memory_usage();
-
-            int last_socket_id = -1;
-            for (int i = 0; i < MAX_WEB_SOCKETS; i++)
-            {
-                int fd = list_of_sockets[i];
-                ESP_LOGI(TAG, "socket:%d  number:%d", fd, i);
-                if (fd != 0)
+                httpd_ws_client_info_t info = httpd_ws_get_fd_info(server, fd);
+                ESP_LOGI(TAG, " info:%d", info);
+                if (info == HTTPD_WS_CLIENT_WEBSOCKET)
                 {
-                    httpd_ws_client_info_t info = httpd_ws_get_fd_info(server, fd);
-                    ESP_LOGI(TAG, " info:%d", info);
-                    if (info == HTTPD_WS_CLIENT_WEBSOCKET)
-                    {
-                        last_socket_id = fd;
-                    }
+                    last_socket_id = fd;
+                }
+                else
+                {
                 }
             }
-            ESP_LOGI(TAG, "last_socket_id:%d", last_socket_id);
-
-            for (int i = 0; i < MAX_WEB_SOCKETS; i++)
-            {
-                int fd = list_of_sockets[i];
-
-                if (fd != 0)
-                {
-                    httpd_ws_client_info_t info = httpd_ws_get_fd_info(server, fd);
-                    ESP_LOGI(TAG, " info:%d", info);
-                    if (info == HTTPD_WS_CLIENT_WEBSOCKET)
-                    {
-                        cb_socket_args_t *args = malloc(sizeof(cb_socket_args_t));
-                        args->socket_fd = fd;
-                        args->last_socket_fd = last_socket_id;
-                        args->data_ptr = ws_pkt.payload;
-
-                        // httpd_ws_send_frame_async(server, fd, &ws_pkt);
-
-                        ESP_LOGI(TAG, "Sending %d bytes to client %d x:%d y:%d", ws_pkt.len, i, fb->width, fb->height);
-                        esp_err_t err = httpd_ws_send_data_async(server, fd, &ws_pkt, &last_frame_callback, args);
-                        if (err != ESP_OK)
-                        {
-                            for (int i = 0; i < 10; i++)
-                            {
-                                ESP_LOGE(TAG, "Error sending frame to client %d", i);
-                            }
-
-                            if (fd == last_socket_id)
-                            {
-                                ESP_LOGE(TAG, "Last socket, freeing data");
-                                free(args);
-                                esp_camera_fb_return(fb);
-                            }
-                        }
-                        else
-                        {
-                            // ESP_LOGI(TAG, "%d bytes sent to client %d", ws_pkt.len, i);
-                            n_clients++;
-                        }
-                    }
-                }
-            }
-            if (n_clients == 0)
-            {
-                esp_camera_fb_return(fb);
-                ESP_LOGI(TAG, "No clients connected");
-            }
-            vTaskDelay(pdMS_TO_TICKS(10));
         }
+
+        ESP_LOGI(TAG, "last_socket_id:%d", last_socket_id);
+
+        if (last_socket_id == -1)
+        {
+            continue;
+        }
+
+        fb = esp_camera_fb_get();
+
+        if (!fb)
+        {
+            ESP_LOGE(TAG, "Camera capture failed");
+            vTaskDelay(500);
+            continue;
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Capture success");
+        }
+
+        memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+
+        ws_pkt.payload = fb->buf;
+        ws_pkt.len = fb->len;
+        ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+
+        for (int i = 0; i < MAX_WEB_SOCKETS; i++)
+        {
+            int fd = list_of_sockets[i];
+
+            if (fd != 0)
+            {
+                httpd_ws_client_info_t info = httpd_ws_get_fd_info(server, fd);
+                ESP_LOGI(TAG, " info:%d", info);
+                if (info == HTTPD_WS_CLIENT_WEBSOCKET)
+                {
+                    cb_socket_args_t *args = malloc(sizeof(cb_socket_args_t));
+                    args->socket_fd = fd;
+                    args->last_socket_fd = last_socket_id;
+                    args->data_ptr = ws_pkt.payload;
+
+                    esp_err_t err = httpd_ws_send_data_async(server, fd, &ws_pkt, &last_frame_callback, args);
+                    ESP_LOGI(TAG, "Sending %d bytes to client %d x:%d y:%d", ws_pkt.len, i, fb->width, fb->height);
+                    if (err != ESP_OK)
+                    {
+                        for (int i = 0; i < 10; i++)
+                        {
+                            ESP_LOGE(TAG, "Error sending frame to client %d", i);
+                        }
+
+                        if (fd == last_socket_id)
+                        {
+                            ESP_LOGE(TAG, "Last socket, freeing data");
+                            free(args);
+                        }
+                    }
+                    else
+                    {
+                        // ESP_LOGI(TAG, "%d bytes sent to client %d", ws_pkt.len, i);
+                        ESP_LOGI(TAG,"data send");
+                        n_clients++;
+                    }
+                }
+            }
+        }
+        if (n_clients == 0)
+        {
+            ESP_LOGI(TAG, "No clients connected");
+        }
+        esp_camera_fb_return(fb);
+        ESP_LOGI(TAG, "freeing camera buffer");
     }
 }
 
@@ -664,117 +658,51 @@ static esp_err_t ws_handler(httpd_req_t *req)
     if (req->method == HTTP_GET)
     {
         ESP_LOGI(TAG, "Handshake done, the new connection was opened");
+
+        if (init_camera() != ESP_OK)
+            ESP_LOGE(TAG, "camera init ERROR !!!");
+        else
+            ESP_LOGI(TAG, "camera init success");
+
         return ESP_OK;
     }
-
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ESP_LOGI(TAG, "Request type: %d - len:%d", req->method, req->content_len);
-    if (req->content_len > 0)
+    ESP_LOGW(TAG, "Request type: %d - len:%d", req->method, req->content_len);
+
+    ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+    // determine the actual packet length
+    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+    if (ret != ESP_OK)
     {
-
-        ws_pkt.type = HTTPD_WS_TYPE_BINARY;
-        esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
-        if (ret != ESP_OK)
-        {
-            ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
-            return ESP_OK;
-        }
-
-        int buffer_len = ws_pkt.len + 1;
-        ws_pkt.payload = malloc(buffer_len);
-
-        ret = httpd_ws_recv_frame(req, &ws_pkt, buffer_len);
-        if (ret != ESP_OK)
-        {
-            ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
-            return ESP_OK;
-        }
-
-        ESP_LOGI(TAG, "Got packet with message: %s", ws_pkt.payload);
-        ESP_LOGI(TAG, "Packet type: %d", ws_pkt.type);
-        if (ws_pkt.type == HTTPD_WS_TYPE_BINARY &&
-            strcmp((char *)ws_pkt.payload, "Trigger async") == 0)
-        {
-            return trigger_async_send(req->handle, req);
-        }
-
-        ret = httpd_ws_send_frame(req, &ws_pkt);
-        if (ret != ESP_OK)
-        {
-            ESP_LOGE(TAG, "httpd_ws_send_frame failed with %d", ret);
-        }
-
-        ret = httpd_ws_send_frame(req, &ws_pkt);
+        ESP_LOGE(TAG, "httpd_ws_recv_frame failed: %s", esp_err_to_name(ret));
+        return ret;
     }
+    int buffer_len = ws_pkt.len + 1;
+    ws_pkt.payload = malloc(buffer_len);
+
+    ret = httpd_ws_recv_frame(req, &ws_pkt, buffer_len);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
+        return ESP_OK;
+    }
+    if (ws_pkt.len >= sizeof(client_event_t))
+    {
+        client_event_t *event = (client_event_t *)ws_pkt.payload;
+        ESP_LOGW(TAG, "Event type: %d - x:%d - y:%d", event->type, event->x, event->y);
+        if (xQueueSend(incoming_client_events, event, pdMS_TO_TICKS(100)) != pdPASS)
+        {
+            ESP_LOGE(TAG, "Failed to send client event to queue");
+        }
+    }
+    else
+    {
+        ESP_LOGW(TAG, "Received less data then expected");
+    }
+
     return ESP_OK;
 }
-
-// esp_err_t jpg_stream_httpd_handler(httpd_req_t *req){
-//     camera_fb_t * fb = NULL;
-//     esp_err_t res = ESP_OK;
-//     size_t _jpg_buf_len;
-//     uint8_t * _jpg_buf;
-//     char * part_buf[64];
-//     static int64_t last_frame = 0;
-//     if(!last_frame) {
-//         last_frame = esp_timer_get_time();
-//     }
-
-//     res = httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
-//     if(res != ESP_OK){
-//         return res;
-//     }
-
-//     while(true){
-//         fb = esp_camera_fb_get();
-//         if (!fb) {
-//             ESP_LOGE(TAG, "Camera capture failed");
-//             res = ESP_FAIL;
-//             break;
-//         }
-//         if(fb->format != PIXFORMAT_JPEG){
-//             bool jpeg_converted = frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
-//             if(!jpeg_converted){
-//                 ESP_LOGE(TAG, "JPEG compression failed");
-//                 esp_camera_fb_return(fb);
-//                 res = ESP_FAIL;
-//             }
-//         } else {
-//             _jpg_buf_len = fb->len;
-//             _jpg_buf = fb->buf;
-//         }
-
-//         if(res == ESP_OK){
-//             res = httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY));
-//         }
-//         if(res == ESP_OK){
-//             size_t hlen = snprintf((char *)part_buf, 64, _STREAM_PART, _jpg_buf_len);
-
-//             res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
-//         }
-//         if(res == ESP_OK){
-//             res = httpd_resp_send_chunk(req, (const char *)_jpg_buf, _jpg_buf_len);
-//         }
-//         if(fb->format != PIXFORMAT_JPEG){
-//             free(_jpg_buf);
-//         }
-//         esp_camera_fb_return(fb);
-//         if(res != ESP_OK){
-//             break;
-//         }
-//         int64_t fr_end = esp_timer_get_time();
-//         int64_t frame_time = fr_end - last_frame;
-//         last_frame = fr_end;
-//         frame_time /= 1000;
-//         ESP_LOGI(TAG, "MJPG: %uKB %ums (%.1ffps)",
-//             (uint32_t)(_jpg_buf_len/1024),
-//             (uint32_t)frame_time, 1000.0 / (uint32_t)frame_time);
-//     }
-
-//     last_frame = 0;
-//     return res;
-// }
 
 static esp_err_t direction_handler(httpd_req_t *req)
 {
@@ -903,55 +831,11 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     }
 }
 
-httpd_uri_t direction_uri = {
-    .uri = "/direction",
-    .method = HTTP_POST,
-    .handler = direction_handler,
-    .user_ctx = NULL,
-};
-
-httpd_uri_t root_uri = {
-    .uri = "/",
-    .method = HTTP_GET,
-    .handler = root_handler,
-    .user_ctx = NULL,
-};
-
-httpd_uri_t root_assets_uri = {
-    .uri = "/assets/*",
-    .method = HTTP_GET,
-    .handler = root_assets_handler,
-    .user_ctx = NULL,
-};
-
-httpd_uri_t root_sensors_uri = {
-    .uri = "/sensors/*",
-    .method = HTTP_GET,
-    .handler = root_sensors_handler,
-    .user_ctx = NULL,
-};
-
-// httpd_uri_t root_sensors_uri = {
-//     .uri = "/camera",
-//     .method = HTTP_GET,
-//     .handler = jpg_stream_httpd_handler,
-//     .user_ctx = NULL,
-// };
-
-httpd_uri_t root_ws_start_uri = {
-    .uri = "/ws",
-    .method = HTTP_GET,
-    .handler = ws_handler,
-    .user_ctx = NULL,
-    .is_websocket = true,
-};
-
 esp_err_t wifi_init(void)
 {
     s_wifi_event_group = xEventGroupCreate();
 
     ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -1017,7 +901,7 @@ esp_err_t connection_open_cb(httpd_handle_t s_h, int sock)
         if (list_of_sockets[i] == 0)
         {
             list_of_sockets[i] = sock;
-            xSemaphoreGive(new_client_semaphore);
+
             return ESP_OK;
         }
     }
@@ -1050,33 +934,94 @@ void connection_close_cb(httpd_handle_t s_h, int sock)
     {
         ESP_LOGE(TAG, "close() fd (%d) failed. rv %d errno %d", sock, rv, errno);
     }
-    close(sock);
+
+    if (esp_camera_deinit() != ESP_OK)
+        ESP_LOGE(TAG, "camera deinit ERROR !!!");
+    else
+        ESP_LOGI(TAG, "camera deinit success");
 };
 
-esp_err_t web_server()
+httpd_uri_t direction_uri = {
+    .uri = "/direction",
+    .method = HTTP_POST,
+    .handler = direction_handler,
+    .user_ctx = NULL,
+    .is_websocket = false,
+};
+
+httpd_uri_t root_uri = {
+    .uri = "/",
+    .method = HTTP_GET,
+    .handler = root_handler,
+    .user_ctx = NULL,
+    .is_websocket = false,
+};
+
+httpd_uri_t root_assets_uri = {
+    .uri = "/assets/*",
+    .method = HTTP_GET,
+    .handler = root_assets_handler,
+    .user_ctx = NULL,
+    .is_websocket = false,
+};
+
+httpd_uri_t root_sensors_uri = {
+    .uri = "/sensors/*",
+    .method = HTTP_GET,
+    .handler = root_sensors_handler,
+    .user_ctx = NULL,
+    .is_websocket = false,
+};
+
+// httpd_uri_t root_sensors_uri = {
+//     .uri = "/camera",
+//     .method = HTTP_GET,
+//     .handler = jpg_stream_httpd_handler,
+//     .user_ctx = NULL,
+// };
+
+httpd_uri_t root_ws_start_uri = {
+    .uri = "/ws",
+    .method = HTTP_GET,
+    .handler = ws_handler,
+    .user_ctx = NULL,
+    .is_websocket = true,
+};
+
+static httpd_handle_t web_server()
 {
-    memset(list_of_sockets, 0, sizeof(int)*MAX_WEB_SOCKETS);
+    memset(list_of_sockets, 0, sizeof(int) * MAX_WEB_SOCKETS);
+    httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
-    config.max_open_sockets = 3;
+    config.max_open_sockets = MAX_WEB_SOCKETS;
+    config.stack_size = 8192;
+    config.recv_wait_timeout = 10; // Timeout for recv function (in seconds)
+    config.send_wait_timeout = 10;
     config.open_fn = connection_open_cb;
     config.close_fn = connection_close_cb;
     config.lru_purge_enable = true;
 
     ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
-    if (httpd_start(&server, &config) != ESP_OK)
+    if (httpd_start(&server, &config) == ESP_OK)
     {
-        ESP_LOGE(TAG, "WEB Server failed !!!\n");
-        return ESP_FAIL;
+        ESP_LOGI(TAG, "WEB Server initialized sus !!!\n");
+        httpd_register_uri_handler(server, &root_sensors_uri);
+        httpd_register_uri_handler(server, &root_assets_uri);
+        httpd_register_uri_handler(server, &direction_uri);
+        httpd_register_uri_handler(server, &root_uri);
+        httpd_register_uri_handler(server, &root_ws_start_uri);
+        return server;
     }
-    ESP_LOGI(TAG, "WEB Server initialized sus !!!\n");
 
-    httpd_register_uri_handler(server, &root_sensors_uri);
-    httpd_register_uri_handler(server, &root_assets_uri);
-    httpd_register_uri_handler(server, &direction_uri);
-    httpd_register_uri_handler(server, &root_uri);
-    httpd_register_uri_handler(server, &root_ws_start_uri);
-    return ESP_OK;
+    ESP_LOGE(TAG, "WEB Server failed !!!\n");
+    return NULL;
+}
+
+static esp_err_t stop_webserver(httpd_handle_t server)
+{
+    // Stop the httpd server
+    return httpd_stop(server);
 }
 
 static esp_err_t init_camera(void)
@@ -1219,11 +1164,6 @@ void peripherical_init()
                           ADS1115_CFG_MS_MODE_SS;
     ads1115_cfg.dev_addr = 0x48;
     ADS1115_initiate(&ads1115_cfg);
-
-    if (init_camera() != ESP_OK)
-        ESP_LOGE(TAG, "camera init ERROR !!!");
-    else
-        ESP_LOGI(TAG, "camera init success");
 }
 
 void BME280_delay_msek(u32 msek)
@@ -1288,10 +1228,10 @@ void app_main()
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
     out_msg_queue = xQueueCreate(100, sizeof(uint8_t *));
     incoming_client_events = xQueueCreate(100, sizeof(client_event_t));
-    xTaskCreate(&img_stream, "img_stream", 4096, NULL, 5, NULL);
 
     ret = wifi_init();
     if (ret != ESP_OK)
@@ -1302,7 +1242,7 @@ void app_main()
     ESP_ERROR_CHECK(ret);
 
     initialise_mdns();
-    ret = web_server();
+    server = web_server();
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "web server ERROR !!!\n");
@@ -1310,12 +1250,9 @@ void app_main()
     ESP_LOGI(TAG, "DALE\n");
     ESP_ERROR_CHECK(ret);
 
-    new_client_semaphore = xSemaphoreCreateBinary();
-    xSemaphoreGive(new_client_semaphore);
-
-
+    xTaskCreate(&img_stream, "img_stream", 4096, NULL, 1, NULL);
     while (1)
     {
-        vTaskDelay(2);
+        vTaskDelay(20000);
     }
 }

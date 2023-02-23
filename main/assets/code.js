@@ -178,6 +178,22 @@ $("#baixo").mouseout(function () {
     speed = 0;
 });
 
+// ---------------- WEB Socket ---------------------//
+
+$("#wsConBtn").on('click',function(){
+    try{
+        connectToWS();
+    }
+    catch{}
+});
+
+$("#wsDiscBtn").on('click',function(){
+    try{
+        myWebSocket.close();
+    }
+    catch{}
+});
+
 // ---------------- jQuery AJAX --------------------//
 
 function direction_send() {
@@ -191,7 +207,7 @@ function direction_send() {
             $("#Angle").html('<p class="text">Angle: ' + Sensor.x.toFixed(2) + 'º</p>');
         },
         error: function (result) {
-            alert('Direction Send Error');
+            console.log('Direction Send Error');
         }
     });
 }
@@ -210,7 +226,7 @@ $("body").ready(function () {
                 $("#battery").html('<p class="text">Battery: ' + (Sensor.BatLvL / 5 * 100).toFixed(2) + '% </p>');
             },
             error: function (result) {
-                alert('Battery Level Sensor Error');
+                console.log('Battery Level Sensor Error');
             }
         });
     }, 10000);
@@ -224,7 +240,7 @@ $("body").ready(function () {
                 $("#temperature").html('<p class="text">Temperature: ' + Sensor.Temp.toFixed(2) + ' ºC</p>');
             },
             error: function (result) {
-                alert('Temperature Sensor Error');
+                console.log('Temperature Sensor Error');
             }
         });
     }, 5000);
@@ -238,34 +254,16 @@ $("body").ready(function () {
                 $("#speed").html();
             },
             error: function (result) {
-                alert('Speed Sensor Error');
+                console.log('Speed Sensor Error');
             }
         });
     }, 1000);
-    
-    // videoReq = setInterval(function(){
-    //     $.ajax({
-    //         type: "GET",
-    //         url: "/camera",
-    //         success: function (result) {
-    //             payload = JSON.parse(result.data);
-                
-    //             document.getElementById("wsVideo").src = "data:image/bmp;base64," + image_data;
-    //         },
-    //         error: function (result) {
-    //             alert('Speed Sensor Error');
-    //         }
-    //     });
-    // },1);
-
-    connectToWS();
-
 });
 
 function connectToWS() {
 
     var ws_protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    var ws_address = ws_protocol+'://' + window.location.hostname + "/ws";
+    var ws_address = ws_protocol + '://' + window.location.hostname + "/ws";
 
     var endpoint = ws_address;
     if (myWebSocket !== undefined) {
@@ -276,47 +274,21 @@ function connectToWS() {
     myWebSocket.binaryType = "arraybuffer";
 
     myWebSocket.onmessage = function (event) {
-        var leng;
+
         if (event.data instanceof ArrayBuffer) {
-            
+
             // incoming data is binary
             console.log("Received binary data" + event.data.size + " bytes");
             event.data.type = 'image/bmp';
-            //var blob = new Blob([event.data], { type: 'image/bmp' });
             var blob = new Blob([event.data], { type: 'image/png' });
             const imageUrl = URL.createObjectURL(blob);
             document.getElementById("wsVideo").src = imageUrl;
 
             // do something with the ArrayBuffer
+            
         } else {
-            // incoming data is text
             console.log("Received text data");
-            // do something with the text data
         }
-
-        // payload = JSON.parse(event.data);
-
-        // if (payload['type'] === 'image') {
-        //     if (payload['last_chunk']) {
-        //         document.getElementById("wsVideo").src = "data:image/bmp;base64," + image_data;
-        //         image_data = "";
-        //         var delta = (new Date()) - start_time;
-        //         var fps = 1000 / delta;
-        //         document.getElementById("fps").innerHTML = "FPS: " + fps.toFixed(2);
-        //         var Bps = (payload['offset'] + payload['data_chunk'].length) / delta;
-        //         document.getElementById("Bps").innerHTML = "Bps: " + Bps.toFixed(2);
-                
-        //     } else {
-        //         if (payload['offset'] === 0) {
-        //             start_time = new Date();
-        //             image_data = payload['data_chunk'];
-        //         }
-        //         else {
-        //             image_data += payload['data_chunk'];
-        //         }
-        //         delete payload['msg'];
-        //     }
-        // }
     }
 
     myWebSocket.onopen = function (evt) {
