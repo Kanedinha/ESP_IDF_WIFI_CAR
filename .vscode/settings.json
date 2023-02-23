@@ -32,7 +32,8 @@
         "future": "c",
         "esp_camera.h": "c",
         "sensor.h": "c",
-        "socket.h": "c"
+        "socket.h": "c",
+        "cerrno": "c"
     }
 }
  

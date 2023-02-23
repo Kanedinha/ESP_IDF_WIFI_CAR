@@ -88,3 +88,14 @@
     // return res;
 
     // return ESP_OK;
+    
+   
+    
+W (247510) httpd_txrx: httpd_sock_err: error in send : 128
+W (247510) httpd_ws: httpd_ws_send_frame_async: Failed to send WS header
+
+    
+    
+    
+    
+    

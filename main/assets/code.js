@@ -181,18 +181,25 @@ $("#baixo").mouseout(function () {
 // ---------------- WEB Socket ---------------------//
 
 $("#wsConBtn").on('click',function(){
-    try{
-        connectToWS();
-    }
-    catch{}
+    connectToWS();
 });
 
 $("#wsDiscBtn").on('click',function(){
-    try{
-        myWebSocket.close();
-    }
-    catch{}
+    myWebSocket.close();
 });
+
+$("#Photo").on('click', function(){
+    $.ajax({
+        type: "GET",
+        url: "/camera",
+        success: function (result) {
+            $("#wsVideo").attr('src', result);
+        },
+        error: function (result) {
+            console.log('Speed Sensor Error');
+        }
+    });
+})
 
 // ---------------- jQuery AJAX --------------------//
 
@@ -250,6 +257,7 @@ $("body").ready(function () {
             type: "GET",
             url: "/sensors/Speed",
             success: function (result) {
+                console.log(result);
                 Sensor = jQuery.parseJSON(result);
                 $("#speed").html();
             },
@@ -260,12 +268,28 @@ $("body").ready(function () {
     }, 1000);
 });
 
+function getCoordinatesFromArrayBuffer(buffer) {
+    // Create a new DataView object with the given buffer
+    const dataView = new DataView(buffer);
+
+    // Get the x and y positions from the DataView using the correct byte offsets
+    const seq = dataView.getUint32(0, /* littleEndian = */ true);
+    const x = dataView.getUint32(4, /* littleEndian = */ true);
+    const y = dataView.getUint32(8, /* littleEndian = */ true);
+    const width = dataView.getUint32(12, /* littleEndian = */ true);
+    const height = dataView.getUint32(16, /* littleEndian = */ true);
+    const pairs = dataView.getUint32(20, /* littleEndian = */ true);
+
+    // Return an object with the extracted coordinates
+    return { seq, x, y, width, height, pairs };
+}
+
 function connectToWS() {
 
     var ws_protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     var ws_address = ws_protocol + '://' + window.location.hostname + "/ws";
-
     var endpoint = ws_address;
+
     if (myWebSocket !== undefined) {
         myWebSocket.close()
     }
@@ -274,21 +298,61 @@ function connectToWS() {
     myWebSocket.binaryType = "arraybuffer";
 
     myWebSocket.onmessage = function (event) {
-
         if (event.data instanceof ArrayBuffer) {
-
+            coords = getCoordinatesFromArrayBuffer(event.data);
             // incoming data is binary
-            console.log("Received binary data" + event.data.size + " bytes");
-            event.data.type = 'image/bmp';
-            var blob = new Blob([event.data], { type: 'image/png' });
-            const imageUrl = URL.createObjectURL(blob);
-            document.getElementById("wsVideo").src = imageUrl;
+            const rle_data = new Uint8Array(event.data.slice(24));
+            const offscreenCanvas = new OffscreenCanvas(coords.width, coords.height);
+            const offscreenCtx = offscreenCanvas.getContext('2d');
+            const image_data = offscreenCtx.createImageData(coords.width, coords.height);
+            if (coords.seq !== prev_seq + 1) {
 
-            // do something with the ArrayBuffer
-            
+                msg = `Missing seq. prev_sec:${prev_seq} -> seq: ${coords.seq}, x: ${coords.x}, y: ${coords.y}, width: ${coords.width}, height: ${coords.height}, pairs: ${coords.pairs}`;
+                console.log(msg);
+
+                if (myWebSocket && prev_seq>-1) {
+                    // Package the coordinates into a binary message
+                    const message = new ArrayBuffer(8);
+                    const view = new DataView(message);
+                    view.setUint16(0, 0, true);
+                    view.setUint16(2, 0, true); // not used here
+                    view.setUint16(4, 0, true); // not used here
+
+                    // Send the message over the WebSocket
+                    myWebSocket.send(message);
+                }
+            }
+            prev_seq = coords.seq;
+            {
+                let offset = 0;
+                for (let i = 0; i < coords.pairs; i++) {
+                    const pair_offset = i * 4;
+                    const r = rle_data[pair_offset];
+                    const g = rle_data[pair_offset + 1];
+                    const b = rle_data[pair_offset + 2];
+                    const count = rle_data[pair_offset + 3];
+                    //console.log(`[${i}] r: ${r}, g: ${g}, b: ${b}, count: ${count} offset: ${offset}`);
+                    for (let j = 0; j < count; j++) {
+                        image_data.data[offset++] = r;
+                        image_data.data[offset++] = g;
+                        image_data.data[offset++] = b;
+                        image_data.data[offset++] = 255;
+                    }
+                }
+                offscreenCtx.putImageData(image_data, 0, 0);
+                const canvas = document.getElementById("wsVideo");
+                const ctx = canvas.getContext("2d");
+                //draw offscreen canvas to main canvas
+                ctx.drawImage(offscreenCanvas, coords.x, coords.y);
+            }
         } else {
+            // incoming data is text
             console.log("Received text data");
+            // do something with the text data
         }
+
+
+
     }
 
     myWebSocket.onopen = function (evt) {
