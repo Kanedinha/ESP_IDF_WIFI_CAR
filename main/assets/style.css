@@ -122,11 +122,15 @@ img {
 }
 
 #wsConBtn{
-    font-size: 10px;
+    font-size: 20px;
 }
 
 #wsDiscBtn{
-    font-size: 10px;
+    font-size: 20px;
+}
+
+#Photo{
+    font-size: 20px;
 }
 
 #unavailable{

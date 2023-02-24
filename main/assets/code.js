@@ -224,48 +224,48 @@ $("body").ready(function () {
 
     // Funciona mas trocar por requisição GET
     // 
-    readBattery = setInterval(function () {
-        $.ajax({
-            type: "GET",
-            url: "/sensors/BatteryLevel",
-            success: function (result) {
-                Sensor = jQuery.parseJSON(result);
-                $("#battery").html('<p class="text">Battery: ' + (Sensor.BatLvL / 5 * 100).toFixed(2) + '% </p>');
-            },
-            error: function (result) {
-                console.log('Battery Level Sensor Error');
-            }
-        });
-    }, 10000);
+    // readBattery = setInterval(function () {
+    //     $.ajax({
+    //         type: "GET",
+    //         url: "/sensors/BatteryLevel",
+    //         success: function (result) {
+    //             Sensor = jQuery.parseJSON(result);
+    //             $("#battery").html('<p class="text">Battery: ' + (Sensor.BatLvL / 5 * 100).toFixed(2) + '% </p>');
+    //         },
+    //         error: function (result) {
+    //             console.log('Battery Level Sensor Error');
+    //         }
+    //     });
+    // }, 10000);
 
-    readTemperature = setInterval(function () {
-        $.ajax({
-            type: "GET",
-            url: "/sensors/Temperature",
-            success: function (result) {
-                Sensor = jQuery.parseJSON(result);
-                $("#temperature").html('<p class="text">Temperature: ' + Sensor.Temp.toFixed(2) + ' ºC</p>');
-            },
-            error: function (result) {
-                console.log('Temperature Sensor Error');
-            }
-        });
-    }, 5000);
+    // readTemperature = setInterval(function () {
+    //     $.ajax({
+    //         type: "GET",
+    //         url: "/sensors/Temperature",
+    //         success: function (result) {
+    //             Sensor = jQuery.parseJSON(result);
+    //             $("#temperature").html('<p class="text">Temperature: ' + Sensor.Temp.toFixed(2) + ' ºC</p>');
+    //         },
+    //         error: function (result) {
+    //             console.log('Temperature Sensor Error');
+    //         }
+    //     });
+    // }, 5000);
 
-    readSpeed = setInterval(function () {
-        $.ajax({
-            type: "GET",
-            url: "/sensors/Speed",
-            success: function (result) {
-                console.log(result);
-                Sensor = jQuery.parseJSON(result);
-                $("#speed").html();
-            },
-            error: function (result) {
-                console.log('Speed Sensor Error');
-            }
-        });
-    }, 1000);
+    // readSpeed = setInterval(function () {
+    //     $.ajax({
+    //         type: "GET",
+    //         url: "/sensors/Speed",
+    //         success: function (result) {
+    //             console.log(result);
+    //             Sensor = jQuery.parseJSON(result);
+    //             $("#speed").html();
+    //         },
+    //         error: function (result) {
+    //             console.log('Speed Sensor Error');
+    //         }
+    //     });
+    // }, 1000);
 });
 
 function getCoordinatesFromArrayBuffer(buffer) {
@@ -295,65 +295,62 @@ function connectToWS() {
     }
 
     myWebSocket = new WebSocket(endpoint);
-    myWebSocket.binaryType = "arraybuffer";
+    // myWebSocket.binaryType = "arraybuffer";
 
-    myWebSocket.onmessage = function (event) {
-        if (event.data instanceof ArrayBuffer) {
-            coords = getCoordinatesFromArrayBuffer(event.data);
-            // incoming data is binary
-            const rle_data = new Uint8Array(event.data.slice(24));
-            const offscreenCanvas = new OffscreenCanvas(coords.width, coords.height);
-            const offscreenCtx = offscreenCanvas.getContext('2d');
-            const image_data = offscreenCtx.createImageData(coords.width, coords.height);
-            if (coords.seq !== prev_seq + 1) {
+    // myWebSocket.onmessage = function (event) {
+    //     if (event.data instanceof ArrayBuffer) {
+    //         coords = getCoordinatesFromArrayBuffer(event.data);
+    //         // incoming data is binary
+    //         const rle_data = new Uint8Array(event.data.slice(24));
+    //         const offscreenCanvas = new OffscreenCanvas(coords.width, coords.height);
+    //         const offscreenCtx = offscreenCanvas.getContext('2d');
+    //         const image_data = offscreenCtx.createImageData(coords.width, coords.height);
+    //         if (coords.seq !== prev_seq + 1) {
 
-                msg = `Missing seq. prev_sec:${prev_seq} -> seq: ${coords.seq}, x: ${coords.x}, y: ${coords.y}, width: ${coords.width}, height: ${coords.height}, pairs: ${coords.pairs}`;
-                console.log(msg);
+    //             msg = `Missing seq. prev_sec:${prev_seq} -> seq: ${coords.seq}, x: ${coords.x}, y: ${coords.y}, width: ${coords.width}, height: ${coords.height}, pairs: ${coords.pairs}`;
+    //             console.log(msg);
 
-                if (myWebSocket && prev_seq>-1) {
-                    // Package the coordinates into a binary message
-                    const message = new ArrayBuffer(8);
-                    const view = new DataView(message);
-                    view.setUint16(0, 0, true);
-                    view.setUint16(2, 0, true); // not used here
-                    view.setUint16(4, 0, true); // not used here
+    //             if (myWebSocket && prev_seq>-1) {
+    //                 // Package the coordinates into a binary message
+    //                 const message = new ArrayBuffer(8);
+    //                 const view = new DataView(message);
+    //                 view.setUint16(0, 0, true);
+    //                 view.setUint16(2, 0, true); // not used here
+    //                 view.setUint16(4, 0, true); // not used here
 
-                    // Send the message over the WebSocket
-                    myWebSocket.send(message);
-                }
-            }
-            prev_seq = coords.seq;
-            {
-                let offset = 0;
-                for (let i = 0; i < coords.pairs; i++) {
-                    const pair_offset = i * 4;
-                    const r = rle_data[pair_offset];
-                    const g = rle_data[pair_offset + 1];
-                    const b = rle_data[pair_offset + 2];
-                    const count = rle_data[pair_offset + 3];
-                    //console.log(`[${i}] r: ${r}, g: ${g}, b: ${b}, count: ${count} offset: ${offset}`);
-                    for (let j = 0; j < count; j++) {
-                        image_data.data[offset++] = r;
-                        image_data.data[offset++] = g;
-                        image_data.data[offset++] = b;
-                        image_data.data[offset++] = 255;
-                    }
-                }
-                offscreenCtx.putImageData(image_data, 0, 0);
-                const canvas = document.getElementById("wsVideo");
-                const ctx = canvas.getContext("2d");
-                //draw offscreen canvas to main canvas
-                ctx.drawImage(offscreenCanvas, coords.x, coords.y);
-            }
-        } else {
-            // incoming data is text
-            console.log("Received text data");
-            // do something with the text data
-        }
-
-
-
-    }
+    //                 // Send the message over the WebSocket
+    //                 myWebSocket.send(message);
+    //             }
+    //         }
+    //         prev_seq = coords.seq;
+    //         {
+    //             let offset = 0;
+    //             for (let i = 0; i < coords.pairs; i++) {
+    //                 const pair_offset = i * 4;
+    //                 const r = rle_data[pair_offset];
+    //                 const g = rle_data[pair_offset + 1];
+    //                 const b = rle_data[pair_offset + 2];
+    //                 const count = rle_data[pair_offset + 3];
+    //                 //console.log(`[${i}] r: ${r}, g: ${g}, b: ${b}, count: ${count} offset: ${offset}`);
+    //                 for (let j = 0; j < count; j++) {
+    //                     image_data.data[offset++] = r;
+    //                     image_data.data[offset++] = g;
+    //                     image_data.data[offset++] = b;
+    //                     image_data.data[offset++] = 255;
+    //                 }
+    //             }
+    //             offscreenCtx.putImageData(image_data, 0, 0);
+    //             const canvas = document.getElementById("wsVideo");
+    //             const ctx = canvas.getContext("2d");
+    //             //draw offscreen canvas to main canvas
+    //             ctx.drawImage(offscreenCanvas, coords.x, coords.y);
+    //         }
+    //     } else {
+    //         // incoming data is text
+    //         console.log("Received text data");
+    //         // do something with the text data
+    //     }
+    // }
 
     myWebSocket.onopen = function (evt) {
         console.log("onopen.");
@@ -367,3 +364,7 @@ function connectToWS() {
         console.log("Error!");
     };
 }
+
+socket.addEventListener('message', (event) => {
+    console.log('Message from server ', event.data);
+});

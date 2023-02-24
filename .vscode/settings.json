@@ -33,7 +33,9 @@
         "esp_camera.h": "c",
         "sensor.h": "c",
         "socket.h": "c",
-        "cerrno": "c"
+        "cerrno": "c",
+        "cam_hal.h": "c",
+        "regex": "c"
     }
 }
  
