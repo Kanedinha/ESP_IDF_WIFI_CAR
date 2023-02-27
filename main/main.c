@@ -71,7 +71,7 @@
 #define CAM_PIN_VSYNC 13
 #define CAM_PIN_HREF 23
 #define CAM_PIN_PCLK 19
-#define CONFIG_XCLK_FREQ 8000000
+#define CONFIG_XCLK_FREQ 10000000
 #define PART_BOUNDARY "123456789000000000000987654321"
 
 #define MAX_WEB_SOCKETS 6
@@ -361,10 +361,7 @@ static esp_err_t root_handler(httpd_req_t *req)
 
 static esp_err_t camera_handler_function(httpd_req_t *req)
 {
-    if (init_camera() != ESP_OK)
-        ESP_LOGE(TAG, "camera init ERROR !!!");
-    else
-        ESP_LOGI(TAG, "camera init success");
+    init_camera();
 
     camera_fb_t *fb = NULL;
     fb = esp_camera_fb_get();
@@ -388,7 +385,7 @@ static esp_err_t camera_handler_function(httpd_req_t *req)
         ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
         esp_camera_fb_return(fb);
 
-        httpd_resp_set_type(req, "image/jpeg");
+        httpd_resp_set_type(req, "image/bmp");
         httpd_resp_set_status(req, HTTPD_200);
         int chunk_size = 1 * 1024;
         for (int i = 0; i < out_len; i += chunk_size)
@@ -403,7 +400,7 @@ static esp_err_t camera_handler_function(httpd_req_t *req)
             vTaskDelay(10 / portTICK_PERIOD_MS);
         }
         httpd_resp_send_chunk(req, NULL, 0);
-
+        esp_camera_fb_return(fb);
         free(out);
     }
 
@@ -1042,8 +1039,8 @@ httpd_uri_t camera_handler = {
     .uri = "/camera",
     .method = HTTP_GET,
     .handler = camera_handler_function,
-    .is_websocket = false,
     .user_ctx = NULL,
+    .is_websocket = true,
 };
 
 httpd_uri_t root_ws_start_uri = {
@@ -1060,7 +1057,7 @@ static httpd_handle_t web_server()
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
-    config.max_open_sockets = MAX_WEB_SOCKETS;
+    // config.max_open_sockets = MAX_WEB_SOCKETS;
     config.stack_size = 8192;
     // config.recv_wait_timeout = 10; // Timeout for recv function (in seconds)
     // config.send_wait_timeout = 10;
@@ -1072,11 +1069,11 @@ static httpd_handle_t web_server()
     if (httpd_start(&server, &config) == ESP_OK)
     {
         ESP_LOGI(TAG, "WEB Server initialized sus !!!\n");
-        // httpd_register_uri_handler(server, &root_sensors_uri);
-        // httpd_register_uri_handler(server, &root_assets_uri);
-        // httpd_register_uri_handler(server, &direction_uri);
-        // httpd_register_uri_handler(server, &root_uri);
-        // httpd_register_uri_handler(server, &root_ws_start_uri);
+        httpd_register_uri_handler(server, &root_sensors_uri);
+        httpd_register_uri_handler(server, &root_assets_uri);
+        httpd_register_uri_handler(server, &direction_uri);
+        httpd_register_uri_handler(server, &root_uri);
+        httpd_register_uri_handler(server, &root_ws_start_uri);
         httpd_register_uri_handler(server, &camera_handler);
         return server;
     }
@@ -1115,10 +1112,10 @@ static esp_err_t init_camera(void)
     camera_config.ledc_timer = LEDC_TIMER_0;
     camera_config.ledc_channel = LEDC_CHANNEL_0;
 
-    camera_config.pixel_format = PIXFORMAT_RGB565;
+    camera_config.pixel_format = PIXFORMAT_GRAYSCALE;
     camera_config.frame_size = FRAMESIZE_VGA;
 
-    camera_config.jpeg_quality = 15;
+    camera_config.jpeg_quality = 32;
     camera_config.fb_count = 5;
     camera_config.grab_mode = CAMERA_GRAB_WHEN_EMPTY; // CAMERA_GRAB_LATEST. Sets when buffers should be filled
     esp_err_t err = esp_camera_init(&camera_config);
@@ -1127,6 +1124,8 @@ static esp_err_t init_camera(void)
         ESP_LOGE(TAG, "Failure camera_init %d %s", errno, strerror(errno));
         return err;
     }
+
+    ESP_LOGI(TAG, "camera_init success ");
     return ESP_OK;
 }
 
@@ -1209,7 +1208,7 @@ void peripherical_init()
     bme280.delay_msec = BME280_delay_msek;
 
     s32 com_rslt;
-    /*
+
     com_rslt = bme280_init(&bme280);
     ESP_LOGI(TAG, "bme init: %d", com_rslt);
     com_rslt += bme280_set_oversamp_pressure(BME280_OVERSAMP_16X);
@@ -1232,7 +1231,6 @@ void peripherical_init()
                           ADS1115_CFG_MS_MODE_SS;
     ads1115_cfg.dev_addr = 0x48;
     ADS1115_initiate(&ads1115_cfg);
-    */
 }
 
 void BME280_delay_msek(u32 msek)
@@ -1288,7 +1286,7 @@ void app_main()
 {
     esp_err_t ret;
 
-    peripherical_init();
+    // peripherical_init();
 
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
