@@ -71,7 +71,7 @@
 #define CAM_PIN_VSYNC 13
 #define CAM_PIN_HREF 23
 #define CAM_PIN_PCLK 19
-#define CONFIG_XCLK_FREQ 10000000
+#define CONFIG_XCLK_FREQ 8000000
 #define PART_BOUNDARY "123456789000000000000987654321"
 
 #define MAX_WEB_SOCKETS 6
@@ -89,8 +89,8 @@
 
 #define SERVO_CH0_PIN 12
 
-#define EXAMPLE_ESP_WIFI_SSID "FORTRON"
-#define EXAMPLE_ESP_WIFI_PASS "for22182tron"
+#define EXAMPLE_ESP_WIFI_SSID "VIVOFIBRA-EBB0"
+#define EXAMPLE_ESP_WIFI_PASS "C1A75F2A3B"
 #define EXAMPLE_ESP_MAXIMUM_RETRY 10
 
 #define WIFI_CONNECTED_BIT BIT0
@@ -361,7 +361,13 @@ static esp_err_t root_handler(httpd_req_t *req)
 
 static esp_err_t camera_handler_function(httpd_req_t *req)
 {
-    camera_fb_t *fb = esp_camera_fb_get();
+    if (init_camera() != ESP_OK)
+        ESP_LOGE(TAG, "camera init ERROR !!!");
+    else
+        ESP_LOGI(TAG, "camera init success");
+
+    camera_fb_t *fb = NULL;
+    fb = esp_camera_fb_get();
     if (!fb)
     {
         ESP_LOGE(TAG, "Camera capture failed errno:%d - %s", errno, strerror(errno));
@@ -394,7 +400,7 @@ static esp_err_t camera_handler_function(httpd_req_t *req)
             }
             ESP_LOGI(TAG, "Sending %d/%d", i, out_len);
             httpd_resp_send_chunk(req, (char *)out + i, bytes_to_send);
-            vTaskDelay(10/portTICK_PERIOD_MS);
+            vTaskDelay(10 / portTICK_PERIOD_MS);
         }
         httpd_resp_send_chunk(req, NULL, 0);
 
@@ -402,7 +408,10 @@ static esp_err_t camera_handler_function(httpd_req_t *req)
     }
 
     ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
-
+    if (esp_camera_deinit() != ESP_OK)
+        ESP_LOGE(TAG, "camera deinit ERROR !!!");
+    else
+        ESP_LOGI(TAG, "camera deinit success");
     return ESP_OK;
 }
 
@@ -718,12 +727,6 @@ static esp_err_t ws_handler(httpd_req_t *req)
     if (req->method == HTTP_GET)
     {
         ESP_LOGI(TAG, "Handshake done, the new connection was opened");
-
-        if (init_camera() != ESP_OK)
-            ESP_LOGE(TAG, "camera init ERROR !!!");
-        else
-            ESP_LOGI(TAG, "camera init success");
-
         return ESP_OK;
     }
     httpd_ws_frame_t ws_pkt;
@@ -1112,11 +1115,11 @@ static esp_err_t init_camera(void)
     camera_config.ledc_timer = LEDC_TIMER_0;
     camera_config.ledc_channel = LEDC_CHANNEL_0;
 
-    camera_config.pixel_format = PIXFORMAT_GRAYSCALE;
+    camera_config.pixel_format = PIXFORMAT_RGB565;
     camera_config.frame_size = FRAMESIZE_VGA;
 
-    camera_config.jpeg_quality = 12;
-    camera_config.fb_count = 2;
+    camera_config.jpeg_quality = 15;
+    camera_config.fb_count = 5;
     camera_config.grab_mode = CAMERA_GRAB_WHEN_EMPTY; // CAMERA_GRAB_LATEST. Sets when buffers should be filled
     esp_err_t err = esp_camera_init(&camera_config);
     if (err != ESP_OK)
@@ -1230,19 +1233,6 @@ void peripherical_init()
     ads1115_cfg.dev_addr = 0x48;
     ADS1115_initiate(&ads1115_cfg);
     */
-    /*
-
-    esp_serial_config_t serial_config = {
-        .baud_rate = 115200,
-        .data_bits = SERIAL_DATA_8_BITS,
-        .parity = SERIAL_PARITY_DISABLE,
-        .stop_bits = SERIAL_STOP_1_BITS,
-        .flow_control = SERIAL_FLOW_CONTROL_DISABLE,
-        .rx_buffer_size = 1024,
-        .tx_buffer_size = 1024,
-    };
-    esp_serial_port_handle_t serial_port = esp_serial_create(&serial_config);
-    */
 }
 
 void BME280_delay_msek(u32 msek)
@@ -1309,8 +1299,8 @@ void app_main()
     ESP_ERROR_CHECK(ret);
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    out_msg_queue = xQueueCreate(100, sizeof(uint8_t *));
-    incoming_client_events = xQueueCreate(100, sizeof(client_event_t));
+    // out_msg_queue = xQueueCreate(100, sizeof(uint8_t *));
+    // incoming_client_events = xQueueCreate(100, sizeof(client_event_t));
 
     ret = wifi_init();
     if (ret != ESP_OK)
@@ -1319,7 +1309,7 @@ void app_main()
     }
     ESP_LOGI(TAG, "ESP_WIFI_INIT\n");
     ESP_ERROR_CHECK(ret);
-    init_camera();
+
     initialise_mdns();
     server = web_server();
     if (ret != ESP_OK)
