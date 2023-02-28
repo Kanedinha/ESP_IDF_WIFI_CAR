@@ -55,23 +55,24 @@
 
 //***************************************************************//
 
-#define CAM_PIN_PWDN -1  // power down is not used
+#define CAMERA_MODEL_M5STACK_PSRAM
+#define CAM_PIN_PWDN 32  // power down is not used
 #define CAM_PIN_RESET -1 // software reset will be performed
-#define CAM_PIN_XCLK 18
-#define CAM_PIN_SIOD 5
-#define CAM_PIN_SIOC 4
-#define CAM_PIN_D7 36
-#define CAM_PIN_D6 39
-#define CAM_PIN_D5 34
-#define CAM_PIN_D4 35
-#define CAM_PIN_D3 32
-#define CAM_PIN_D2 33
-#define CAM_PIN_D1 25
-#define CAM_PIN_D0 26
-#define CAM_PIN_VSYNC 13
+#define CAM_PIN_XCLK 21
+#define CAM_PIN_SIOD 26
+#define CAM_PIN_SIOC 27
+#define CAM_PIN_D7 35
+#define CAM_PIN_D6 34
+#define CAM_PIN_D5 39
+#define CAM_PIN_D4 36
+#define CAM_PIN_D3 21
+#define CAM_PIN_D2 19
+#define CAM_PIN_D1 18
+#define CAM_PIN_D0 5
+#define CAM_PIN_VSYNC 25
 #define CAM_PIN_HREF 23
-#define CAM_PIN_PCLK 19
-#define CONFIG_XCLK_FREQ 10000000
+#define CAM_PIN_PCLK 22
+#define CONFIG_XCLK_FREQ 8000000
 #define PART_BOUNDARY "123456789000000000000987654321"
 
 #define MAX_WEB_SOCKETS 6
@@ -89,8 +90,8 @@
 
 #define SERVO_CH0_PIN 12
 
-#define EXAMPLE_ESP_WIFI_SSID "VIVOFIBRA-EBB0"
-#define EXAMPLE_ESP_WIFI_PASS "C1A75F2A3B"
+#define EXAMPLE_ESP_WIFI_SSID "Projetos"
+#define EXAMPLE_ESP_WIFI_PASS "ftn22182"
 #define EXAMPLE_ESP_MAXIMUM_RETRY 10
 
 #define WIFI_CONNECTED_BIT BIT0
@@ -167,7 +168,7 @@ camera_config_t camera_config;
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
-static const char *TAG = "wifi station";
+static const char *TAG = "Kaneda's project";
 static ledc_channel_config_t ledc_channel;
 
 int16_t pos_count = 0;
@@ -361,10 +362,9 @@ static esp_err_t root_handler(httpd_req_t *req)
 
 static esp_err_t camera_handler_function(httpd_req_t *req)
 {
-    init_camera();
-
     camera_fb_t *fb = NULL;
     fb = esp_camera_fb_get();
+
     if (!fb)
     {
         ESP_LOGE(TAG, "Camera capture failed errno:%d - %s", errno, strerror(errno));
@@ -372,7 +372,6 @@ static esp_err_t camera_handler_function(httpd_req_t *req)
         extern const uint8_t unavailable_end[] asm("_binary_unavailable_jpeg_end");     // uint8_t
         httpd_resp_set_type(req, "image/jpeg");
         httpd_resp_send(req, (char *)unavailable_start, unavailable_end - unavailable_start - 1);
-        esp_camera_fb_return(fb);
     }
     else
     {
@@ -385,8 +384,9 @@ static esp_err_t camera_handler_function(httpd_req_t *req)
         ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
         esp_camera_fb_return(fb);
 
-        httpd_resp_set_type(req, "image/bmp");
+        httpd_resp_set_type(req, "image/jpeg");
         httpd_resp_set_status(req, HTTPD_200);
+        
         int chunk_size = 1 * 1024;
         for (int i = 0; i < out_len; i += chunk_size)
         {
@@ -396,19 +396,25 @@ static esp_err_t camera_handler_function(httpd_req_t *req)
                 bytes_to_send = out_len - i + 1;
             }
             ESP_LOGI(TAG, "Sending %d/%d", i, out_len);
+            httpd_resp_set_type(req, "image/jpeg");
+            httpd_resp_set_status(req, HTTPD_200);
             httpd_resp_send_chunk(req, (char *)out + i, bytes_to_send);
             vTaskDelay(10 / portTICK_PERIOD_MS);
         }
         httpd_resp_send_chunk(req, NULL, 0);
-        esp_camera_fb_return(fb);
+        
+        
         free(out);
     }
 
+    esp_camera_fb_return(fb);
     ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
-    if (esp_camera_deinit() != ESP_OK)
+
+    /*if (esp_camera_deinit() != ESP_OK)
         ESP_LOGE(TAG, "camera deinit ERROR !!!");
     else
         ESP_LOGI(TAG, "camera deinit success");
+    */
     return ESP_OK;
 }
 
@@ -936,7 +942,7 @@ esp_err_t wifi_init(void)
     }
     else if (bits & WIFI_FAIL_BIT)
     {
-        ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s",
+        ESP_LOGE(TAG, "Failed to connect to SSID:%s, password:%s",
                  EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
     }
     else
@@ -1040,7 +1046,7 @@ httpd_uri_t camera_handler = {
     .method = HTTP_GET,
     .handler = camera_handler_function,
     .user_ctx = NULL,
-    .is_websocket = true,
+    .is_websocket = false,
 };
 
 httpd_uri_t root_ws_start_uri = {
@@ -1090,35 +1096,38 @@ static esp_err_t stop_webserver(httpd_handle_t server)
 
 static esp_err_t init_camera(void)
 {
-    camera_config.pin_pwdn = CAM_PIN_PWDN;
-    camera_config.pin_reset = CAM_PIN_RESET;
-    camera_config.pin_xclk = CAM_PIN_XCLK;
-    camera_config.pin_sccb_sda = CAM_PIN_SIOD;
-    camera_config.pin_sccb_scl = CAM_PIN_SIOC;
+    camera_config.pin_pwdn = 32;
+    camera_config.pin_reset = -1;
+    camera_config.pin_xclk = 13;
+    camera_config.pin_sccb_sda = 26;
+    camera_config.pin_sccb_scl = 27;
 
-    camera_config.pin_d7 = CAM_PIN_D7;
-    camera_config.pin_d6 = CAM_PIN_D6;
-    camera_config.pin_d5 = CAM_PIN_D5;
-    camera_config.pin_d4 = CAM_PIN_D4;
-    camera_config.pin_d3 = CAM_PIN_D3;
-    camera_config.pin_d2 = CAM_PIN_D2;
-    camera_config.pin_d1 = CAM_PIN_D1;
-    camera_config.pin_d0 = CAM_PIN_D0;
-    camera_config.pin_vsync = CAM_PIN_VSYNC;
-    camera_config.pin_href = CAM_PIN_HREF;
-    camera_config.pin_pclk = CAM_PIN_PCLK;
+    camera_config.pin_d7 = 35;
+    camera_config.pin_d6 = 34;
+    camera_config.pin_d5 = 39;
+    camera_config.pin_d4 = 36;
+    camera_config.pin_d3 = 21;
+    camera_config.pin_d2 = 19;
+    camera_config.pin_d1 = 18;
+    camera_config.pin_d0 = 5;
 
-    camera_config.xclk_freq_hz = CONFIG_XCLK_FREQ;
+    camera_config.pin_vsync = 25;
+    camera_config.pin_href = 23;
+    camera_config.pin_pclk = 22;
+    camera_config.xclk_freq_hz = 4000000;
+
     camera_config.ledc_timer = LEDC_TIMER_0;
     camera_config.ledc_channel = LEDC_CHANNEL_0;
 
-    camera_config.pixel_format = PIXFORMAT_GRAYSCALE;
-    camera_config.frame_size = FRAMESIZE_VGA;
+    camera_config.pixel_format = PIXFORMAT_RGB565;
+    camera_config.frame_size = FRAMESIZE_QVGA;
 
-    camera_config.jpeg_quality = 32;
-    camera_config.fb_count = 5;
+    camera_config.jpeg_quality = 12;
+    camera_config.fb_count = 2;
     camera_config.grab_mode = CAMERA_GRAB_WHEN_EMPTY; // CAMERA_GRAB_LATEST. Sets when buffers should be filled
+
     esp_err_t err = esp_camera_init(&camera_config);
+
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "Failure camera_init %d %s", errno, strerror(errno));
@@ -1176,19 +1185,19 @@ void peripherical_init()
     // };
     // iot_servo_init(LEDC_LOW_SPEED_MODE, &servo_cfg);
 
-    gpio_set_direction(COIL1, GPIO_MODE_OUTPUT);
-    gpio_set_direction(COIL2, GPIO_MODE_OUTPUT);
-    gpio_set_direction(COIL3, GPIO_MODE_OUTPUT);
-    gpio_set_direction(COIL4, GPIO_MODE_OUTPUT);
-    gpio_set_direction(H_BRIDGE_1, GPIO_MODE_OUTPUT);
-    gpio_set_direction(H_BRIDGE_2, GPIO_MODE_OUTPUT);
+    // gpio_set_direction(COIL1, GPIO_MODE_OUTPUT);
+    // gpio_set_direction(COIL2, GPIO_MODE_OUTPUT);
+    // gpio_set_direction(COIL3, GPIO_MODE_OUTPUT);
+    // gpio_set_direction(COIL4, GPIO_MODE_OUTPUT);
+    // gpio_set_direction(H_BRIDGE_1, GPIO_MODE_OUTPUT);
+    // gpio_set_direction(H_BRIDGE_2, GPIO_MODE_OUTPUT);
 
-    gpio_set_level(COIL1, 0);
-    gpio_set_level(COIL2, 0);
-    gpio_set_level(COIL3, 0);
-    gpio_set_level(COIL4, 0);
-    gpio_set_level(H_BRIDGE_1, 0);
-    gpio_set_level(H_BRIDGE_2, 0);
+    // gpio_set_level(COIL1, 0);
+    // gpio_set_level(COIL2, 0);
+    // gpio_set_level(COIL3, 0);
+    // gpio_set_level(COIL4, 0);
+    // gpio_set_level(H_BRIDGE_1, 0);
+    // gpio_set_level(H_BRIDGE_2, 0);
 
     ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
     i2c_config_t conf = {
@@ -1202,35 +1211,35 @@ void peripherical_init()
     };
     i2c_param_config(I2C_NUM_0, &conf);
 
-    bme280.bus_write = i2c_write;
-    bme280.bus_read = i2c_read;
-    bme280.dev_addr = BME280_I2C_ADDRESS1;
-    bme280.delay_msec = BME280_delay_msek;
+    // bme280.bus_write = i2c_write;
+    // bme280.bus_read = i2c_read;
+    // bme280.dev_addr = BME280_I2C_ADDRESS1;
+    // bme280.delay_msec = BME280_delay_msek;
 
-    s32 com_rslt;
+    // s32 com_rslt;
 
-    com_rslt = bme280_init(&bme280);
-    ESP_LOGI(TAG, "bme init: %d", com_rslt);
-    com_rslt += bme280_set_oversamp_pressure(BME280_OVERSAMP_16X);
-    ESP_LOGI(TAG, "bme press: %d", com_rslt);
-    com_rslt += bme280_set_oversamp_temperature(BME280_OVERSAMP_2X);
-    ESP_LOGI(TAG, "bme temp: %d", com_rslt);
+    // com_rslt = bme280_init(&bme280);
+    // ESP_LOGI(TAG, "bme init: %d", com_rslt);
+    // com_rslt += bme280_set_oversamp_pressure(BME280_OVERSAMP_16X);
+    // ESP_LOGI(TAG, "bme press: %d", com_rslt);
+    // com_rslt += bme280_set_oversamp_temperature(BME280_OVERSAMP_2X);
+    // ESP_LOGI(TAG, "bme temp: %d", com_rslt);
 
-    com_rslt += bme280_set_power_mode(BME280_NORMAL_MODE);
-    ESP_LOGI(TAG, "bme pwr mode: %d", com_rslt);
-    if (com_rslt == SUCCESS)
-        ESP_LOGI(TAG, "BME280 init!");
-    else
-        ESP_LOGE(TAG, "BME280 ERROR !!!");
+    // com_rslt += bme280_set_power_mode(BME280_NORMAL_MODE);
+    // ESP_LOGI(TAG, "bme pwr mode: %d", com_rslt);
+    // if (com_rslt == SUCCESS)
+    //     ESP_LOGI(TAG, "BME280 init!");
+    // else
+    //     ESP_LOGE(TAG, "BME280 ERROR !!!");
 
-    ads1115_cfg.reg_cfg = ADS1115_CFG_LS_COMP_MODE_TRAD | // Comparator is traditional
-                          ADS1115_CFG_LS_COMP_LAT_NON |   // Comparator is non-latching
-                          ADS1115_CFG_LS_COMP_POL_LOW |   // Alert is active low
-                          ADS1115_CFG_LS_COMP_QUE_DIS |   // Compator is disabled
-                          ADS1115_CFG_LS_DR_1600SPS |     // No. of samples to take
-                          ADS1115_CFG_MS_MODE_SS;
-    ads1115_cfg.dev_addr = 0x48;
-    ADS1115_initiate(&ads1115_cfg);
+    // ads1115_cfg.reg_cfg = ADS1115_CFG_LS_COMP_MODE_TRAD | // Comparator is traditional
+    //                       ADS1115_CFG_LS_COMP_LAT_NON |   // Comparator is non-latching
+    //                       ADS1115_CFG_LS_COMP_POL_LOW |   // Alert is active low
+    //                       ADS1115_CFG_LS_COMP_QUE_DIS |   // Compator is disabled
+    //                       ADS1115_CFG_LS_DR_1600SPS |     // No. of samples to take
+    //                       ADS1115_CFG_MS_MODE_SS;
+    // ads1115_cfg.dev_addr = 0x48;
+    // ADS1115_initiate(&ads1115_cfg);
 }
 
 void BME280_delay_msek(u32 msek)
@@ -1314,6 +1323,8 @@ void app_main()
     {
         ESP_LOGE(TAG, "web server ERROR !!!\n");
     }
+
+    init_camera();
     ESP_LOGI(TAG, "DALE\n");
     ESP_ERROR_CHECK(ret);
 
