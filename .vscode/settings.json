@@ -35,7 +35,9 @@
         "socket.h": "c",
         "cerrno": "c",
         "cam_hal.h": "c",
-        "regex": "c"
+        "regex": "c",
+        "esp_vfs.h": "c",
+        "esp_log.h": "c"
     }
 }
  

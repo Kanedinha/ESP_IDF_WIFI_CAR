@@ -363,6 +363,7 @@ static esp_err_t root_handler(httpd_req_t *req)
 static esp_err_t camera_handler_function(httpd_req_t *req)
 {
     camera_fb_t *fb = NULL;
+
     fb = esp_camera_fb_get();
 
     if (!fb)
@@ -386,35 +387,32 @@ static esp_err_t camera_handler_function(httpd_req_t *req)
 
         httpd_resp_set_type(req, "image/jpeg");
         httpd_resp_set_status(req, HTTPD_200);
-        
-        int chunk_size = 1 * 1024;
-        for (int i = 0; i < out_len; i += chunk_size)
-        {
-            int bytes_to_send = chunk_size;
-            if (i + chunk_size > out_len)
-            {
-                bytes_to_send = out_len - i + 1;
-            }
-            ESP_LOGI(TAG, "Sending %d/%d", i, out_len);
-            httpd_resp_set_type(req, "image/jpeg");
-            httpd_resp_set_status(req, HTTPD_200);
-            httpd_resp_send_chunk(req, (char *)out + i, bytes_to_send);
-            vTaskDelay(10 / portTICK_PERIOD_MS);
-        }
+        httpd_resp_send_chunk(req, (char *)out, out_len);
+
+        // int chunk_size = 1 * 1024;
+        // for (int i = 0; i < out_len; i += chunk_size)
+        // {
+        //     int bytes_to_send = chunk_size;
+        //     if (i + chunk_size > out_len)
+        //     {
+        //         bytes_to_send = out_len - i + 1;
+        //     }
+        //     ESP_LOGI(TAG, "Sending %d/%d", i, out_len);
+        //     httpd_resp_set_type(req, "image/jpeg");
+        //     httpd_resp_set_status(req, HTTPD_200);
+        //     httpd_resp_send_chunk(req, (char *)out + i, bytes_to_send);
+        // }
         httpd_resp_send_chunk(req, NULL, 0);
-        
-        
+
         free(out);
     }
-
-    esp_camera_fb_return(fb);
-    ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
 
     /*if (esp_camera_deinit() != ESP_OK)
         ESP_LOGE(TAG, "camera deinit ERROR !!!");
     else
         ESP_LOGI(TAG, "camera deinit success");
     */
+
     return ESP_OK;
 }
 
@@ -583,7 +581,7 @@ void last_frame_callback(esp_err_t err, int socket, void *arg)
     }
     free(arg);
 }
-/*
+
 void img_stream(void *args)
 {
     camera_fb_t *fb = NULL;
@@ -594,7 +592,7 @@ void img_stream(void *args)
     {
         n_clients = 0;
 
-        vTaskDelay(1000);
+        vTaskDelay(1);
         int last_socket_id = -1;
         for (int i = 0; i < MAX_WEB_SOCKETS; i++)
         {
@@ -629,18 +627,21 @@ void img_stream(void *args)
             vTaskDelay(500);
             continue;
         }
-        else
-        {
-            ESP_LOGI(TAG, "Capture success");
-        }
+
+        uint8_t *out;
+        size_t out_len;
+        int quality = 100;
+
+        ESP_LOGI(TAG, "Capture success");
+        fmt2jpg(fb->buf, fb->len, fb->width, fb->height, fb->format, quality, &out, &out_len);
+        ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
+        esp_camera_fb_return(fb);
 
         memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
 
-        ws_pkt.payload = fb->buf;
-        ws_pkt.len = fb->len;
+        ws_pkt.payload = out;
+        ws_pkt.len = out_len;
         ws_pkt.type = HTTPD_WS_TYPE_BINARY;
-
-        ESP_LOGI(TAG, "JPG: %luKB", (uint32_t)(fb->len / 1024));
 
         for (int i = 0; i < MAX_WEB_SOCKETS; i++)
         {
@@ -657,18 +658,9 @@ void img_stream(void *args)
                     args->last_socket_fd = last_socket_id;
                     args->data_ptr = ws_pkt.payload;
 
-                    char buffer[1024];
-                    size_t bytes_read;
-                    while ((bytes_read = fread(buffer, 1, sizeof(buffer), fb->buf)) > 0)
-                    {
-                        esp_serial_write(serial_port, buffer, bytes_read);
-                    }
-                    esp_serial_destroy(serial_port);
-
-                    // esp_err_t err = httpd_ws_send_data_async(server, fd, &ws_pkt, &last_frame_callback, args);
-                    esp_err_t err = ESP_OK
-
-                        ESP_LOGI(TAG, "Sending %d bytes to client %d x:%d y:%d", ws_pkt.len, i, fb->width, fb->height);
+                    esp_err_t err = httpd_ws_send_data_async(server, fd, &ws_pkt, &last_frame_callback, args);
+                    // esp_err_t err = ESP_OK;
+                    ESP_LOGI(TAG, "Sending %d bytes to client %d", ws_pkt.len, i);
                     if (err != ESP_OK)
                     {
                         for (int i = 0; i < 10; i++)
@@ -695,11 +687,10 @@ void img_stream(void *args)
         {
             ESP_LOGI(TAG, "No clients connected");
         }
-        esp_camera_fb_return(fb);
+        free(out);
         ESP_LOGI(TAG, "freeing camera buffer");
     }
 }
-*/
 
 static void ws_async_send(void *arg)
 {
@@ -1063,13 +1054,13 @@ static httpd_handle_t web_server()
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
-    // config.max_open_sockets = MAX_WEB_SOCKETS;
+    config.max_open_sockets = MAX_WEB_SOCKETS;
     config.stack_size = 8192;
-    // config.recv_wait_timeout = 10; // Timeout for recv function (in seconds)
-    // config.send_wait_timeout = 10;
-    // config.open_fn = connection_open_cb;
-    // config.close_fn = connection_close_cb;
-    // config.lru_purge_enable = true;
+    config.recv_wait_timeout = 10; // Timeout for recv function (in seconds)
+    config.send_wait_timeout = 10;
+    config.open_fn = connection_open_cb;
+    config.close_fn = connection_close_cb;
+    config.lru_purge_enable = true;
 
     ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
     if (httpd_start(&server, &config) == ESP_OK)
@@ -1306,8 +1297,8 @@ void app_main()
     ESP_ERROR_CHECK(ret);
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    // out_msg_queue = xQueueCreate(100, sizeof(uint8_t *));
-    // incoming_client_events = xQueueCreate(100, sizeof(client_event_t));
+    out_msg_queue = xQueueCreate(100, sizeof(uint8_t *));
+    incoming_client_events = xQueueCreate(100, sizeof(client_event_t));
 
     ret = wifi_init();
     if (ret != ESP_OK)
@@ -1328,7 +1319,7 @@ void app_main()
     ESP_LOGI(TAG, "DALE\n");
     ESP_ERROR_CHECK(ret);
 
-    // xTaskCreate(&img_stream, "img_stream", 4096, NULL, 1, NULL);
+    xTaskCreate(&img_stream, "img_stream", 4096, NULL, 1, NULL);
     while (1)
     {
         vTaskDelay(20000);
