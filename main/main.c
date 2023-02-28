@@ -1120,11 +1120,11 @@ static esp_err_t init_camera(void)
     camera_config.ledc_channel = LEDC_CHANNEL_0;
 
     camera_config.pixel_format = PIXFORMAT_RGB565;
-    camera_config.frame_size = FRAMESIZE_QVGA;
+    camera_config.frame_size = FRAMESIZE_VGA;
 
     camera_config.jpeg_quality = 12;
-    camera_config.fb_count = 2;
-    camera_config.grab_mode = CAMERA_GRAB_WHEN_EMPTY; // CAMERA_GRAB_LATEST. Sets when buffers should be filled
+    camera_config.fb_count = 4;
+    camera_config.grab_mode = CAMERA_GRAB_LATEST; // CAMERA_GRAB_LATEST. Sets when buffers should be filled
 
     esp_err_t err = esp_camera_init(&camera_config);
 
