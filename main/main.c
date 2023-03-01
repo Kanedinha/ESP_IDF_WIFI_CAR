@@ -75,7 +75,7 @@
 #define CONFIG_XCLK_FREQ 8000000
 #define PART_BOUNDARY "123456789000000000000987654321"
 
-#define MAX_WEB_SOCKETS 6
+#define MAX_WEB_SOCKETS 2
 
 #define MICROSTEP 1
 #define MAX_STEP 4096
@@ -406,13 +406,6 @@ static esp_err_t camera_handler_function(httpd_req_t *req)
 
         free(out);
     }
-
-    /*if (esp_camera_deinit() != ESP_OK)
-        ESP_LOGE(TAG, "camera deinit ERROR !!!");
-    else
-        ESP_LOGI(TAG, "camera deinit success");
-    */
-
     return ESP_OK;
 }
 
@@ -573,13 +566,13 @@ static void initialise_mdns(void)
 
 void last_frame_callback(esp_err_t err, int socket, void *arg)
 {
-    cb_socket_args_t *cb_args = (cb_socket_args_t *)arg;
-    if (cb_args->socket_fd == cb_args->last_socket_fd)
-    {
-        ESP_LOGI(TAG, "frame callback was ");
-        // heap_caps_free(cb_args->data_ptr);
-    }
-    free(arg);
+    // cb_socket_args_t *cb_args = (cb_socket_args_t *)arg;
+    // if (cb_args->socket_fd == cb_args->last_socket_fd)
+    // {
+    //     // ESP_LOGI(TAG, "frame callback was ");
+    //     // heap_caps_free(cb_args->data_ptr);
+    // }
+    // free(arg);
 }
 
 void img_stream(void *args)
@@ -588,20 +581,27 @@ void img_stream(void *args)
     httpd_ws_frame_t ws_pkt;
     uint8_t *data;
     uint8_t n_clients = 0;
+    static int64_t last_frame = 0;
+
+    if (!last_frame)
+    {
+        last_frame = esp_timer_get_time();
+    }
+
     while (1)
     {
         n_clients = 0;
+        memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
 
-        vTaskDelay(1);
         int last_socket_id = -1;
         for (int i = 0; i < MAX_WEB_SOCKETS; i++)
         {
             int fd = list_of_sockets[i];
-            ESP_LOGI(TAG, "socket:%d  number:%d", fd, i);
+            // ESP_LOGI(TAG, "socket:%d  number:%d", fd, i);
             if (fd != 0)
             {
                 httpd_ws_client_info_t info = httpd_ws_get_fd_info(server, fd);
-                ESP_LOGI(TAG, " info:%d", info);
+                // ESP_LOGI(TAG, " info:%d", info);
                 if (info == HTTPD_WS_CLIENT_WEBSOCKET)
                 {
                     last_socket_id = fd;
@@ -612,7 +612,7 @@ void img_stream(void *args)
             }
         }
 
-        ESP_LOGI(TAG, "last_socket_id:%d", last_socket_id);
+        // ESP_LOGI(TAG, "last_socket_id:%d", last_socket_id);
 
         if (last_socket_id == -1)
         {
@@ -628,19 +628,20 @@ void img_stream(void *args)
             continue;
         }
 
-        uint8_t *out;
-        size_t out_len;
-        int quality = 100;
+        // uint8_t *out;
+        // size_t out_len;
+        // int quality = 25;
 
         ESP_LOGI(TAG, "Capture success");
-        fmt2jpg(fb->buf, fb->len, fb->width, fb->height, fb->format, quality, &out, &out_len);
-        ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
-        esp_camera_fb_return(fb);
+        // fmt2jpg(fb->buf, fb->len, fb->width, fb->height, fb->format, quality, &out, &out_len);
+        ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", fb->buf, fb->len);
+        // ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
+        // esp_camera_fb_return(fb);
 
-        memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-
-        ws_pkt.payload = out;
-        ws_pkt.len = out_len;
+        ws_pkt.payload = fb->buf;
+        ws_pkt.len = fb->len;
+        // ws_pkt.payload = out;
+        // ws_pkt.len = out_len;
         ws_pkt.type = HTTPD_WS_TYPE_BINARY;
 
         for (int i = 0; i < MAX_WEB_SOCKETS; i++)
@@ -650,7 +651,7 @@ void img_stream(void *args)
             if (fd != 0)
             {
                 httpd_ws_client_info_t info = httpd_ws_get_fd_info(server, fd);
-                ESP_LOGI(TAG, " info:%d", info);
+                // ESP_LOGI(TAG, " info:%d", info);
                 if (info == HTTPD_WS_CLIENT_WEBSOCKET)
                 {
                     cb_socket_args_t *args = malloc(sizeof(cb_socket_args_t));
@@ -676,7 +677,7 @@ void img_stream(void *args)
                     }
                     else
                     {
-                        // ESP_LOGI(TAG, "%d bytes sent to client %d", ws_pkt.len, i);
+                        ESP_LOGI(TAG, "%d bytes sent to client %d", ws_pkt.len, i);
                         ESP_LOGI(TAG, "data send");
                         n_clients++;
                     }
@@ -687,8 +688,15 @@ void img_stream(void *args)
         {
             ESP_LOGI(TAG, "No clients connected");
         }
-        free(out);
+
+        esp_camera_fb_return(fb);
+        // free(out);
         ESP_LOGI(TAG, "freeing camera buffer");
+        int64_t fr_end = esp_timer_get_time();
+        int64_t frame_time = fr_end - last_frame;
+        last_frame = fr_end;
+        frame_time /= 1000;
+        ESP_LOGI(TAG, "MJPG: %lu KB (%.2ffps)", (uint32_t)(ws_pkt.len / 1024), 1000.0 / (uint32_t)frame_time);
     }
 }
 
@@ -702,7 +710,7 @@ static void ws_async_send(void *arg)
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.payload = (uint8_t *)data;
     ws_pkt.len = strlen(data);
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+    ws_pkt.type = HTTPD_WS_TYPE_BINARY;
 
     httpd_ws_send_frame_async(hd, fd, &ws_pkt);
     free(resp_arg);
@@ -991,13 +999,6 @@ void connection_close_cb(httpd_handle_t s_h, int sock)
     {
         ESP_LOGE(TAG, "close() fd (%d) failed. rv %d errno %d", sock, rv, errno);
     }
-
-    /*
-    if (esp_camera_deinit() != ESP_OK)
-        ESP_LOGE(TAG, "camera deinit ERROR !!!");
-    else
-        ESP_LOGI(TAG, "camera deinit success");
-    */
 };
 
 httpd_uri_t direction_uri = {
@@ -1114,7 +1115,7 @@ static esp_err_t init_camera(void)
     camera_config.frame_size = FRAMESIZE_VGA;
 
     camera_config.jpeg_quality = 12;
-    camera_config.fb_count = 4;
+    camera_config.fb_count = 2;
     camera_config.grab_mode = CAMERA_GRAB_LATEST; // CAMERA_GRAB_LATEST. Sets when buffers should be filled
 
     esp_err_t err = esp_camera_init(&camera_config);
@@ -1319,9 +1320,9 @@ void app_main()
     ESP_LOGI(TAG, "DALE\n");
     ESP_ERROR_CHECK(ret);
 
-    xTaskCreate(&img_stream, "img_stream", 4096, NULL, 1, NULL);
+    xTaskCreate(&img_stream, "img_stream", 4096, NULL, 20, NULL);
     while (1)
     {
-        vTaskDelay(20000);
+        vTaskDelay(10);
     }
 }

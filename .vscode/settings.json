@@ -37,7 +37,8 @@
         "cam_hal.h": "c",
         "regex": "c",
         "esp_vfs.h": "c",
-        "esp_log.h": "c"
+        "esp_log.h": "c",
+        "*.tcc": "cpp"
     }
 }
  

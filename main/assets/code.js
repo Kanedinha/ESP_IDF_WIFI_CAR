@@ -188,23 +188,23 @@ $("#wsDiscBtn").on('click', function () {
     myWebSocket.close();
 });
 
-// $("#Photo").on('click', function () {
-//     $.ajax({
-//         type: "GET",
-//         xhrFields: {
-//             responseType: 'blob'
-//         },
-//         url: "/camera",
-//         success: function (data) {
-//             const url = window.URL || window.webkitURL;
-//             const src = url.createObjectURL(data);
-//             $("#wsVideo").attr('src', src);
-//         },
-//         error: function (result) {
-//             console.log('failed to get image');
-//         }
-//     });
-// })
+$("#Photo").on('click', function () {
+    $.ajax({
+        type: "GET",
+        xhrFields: {
+            responseType: 'blob'
+        },
+        url: "/camera",
+        success: function (data) {
+            const url = window.URL || window.webkitURL;
+            const src = url.createObjectURL(data);
+            $("#wsVideo").attr('src', src);
+        },
+        error: function (result) {
+            console.log('failed to get image');
+        }
+    });
+})
 
 // ---------------- jQuery AJAX --------------------//
 
@@ -271,8 +271,44 @@ $("body").ready(function () {
     //         }
     //     });
     // }, 1000);
-    
+
 });
+
+function rgb565ToCanvas(rgb565Data, width, height) {
+    // Criar um canvas HTML temporário
+    const canvas = document.getElementById('wsVideo');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+
+    // Crie um canvas temporário para processar a imagem
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    const tempCtx = tempCanvas.getContext('2d');
+
+
+
+    // Converter os dados RGB565 para RGB8
+    const imageData = tempCtx.createImageData(width, height);
+    for (let i = 0; i < width * height; i++) {
+        const rgb565 = (rgb565Data[i * 2] << 8) | rgb565Data[i * 2 + 1];
+        const r = (rgb565 >> 11) & 0x1F;
+        const g = (rgb565 >> 5) & 0x3F;
+        const b = rgb565 & 0x1F;
+        imageData.data[i * 4] = Math.round(r * 255 / 31);
+        imageData.data[i * 4 + 1] = Math.round(g * 255 / 63);
+        imageData.data[i * 4 + 2] = Math.round(b * 255 / 31);
+        imageData.data[i * 4 + 3] = 255;
+    }
+
+    // Renderize a imagem no canvas temporário
+    tempCtx.putImageData(imageData, 0, 0);
+    
+    // Desenhar a imagem no canvas
+    context.drawImage(tempCanvas, 0, 0);
+
+}
 
 function connectToWS() {
 
@@ -288,12 +324,27 @@ function connectToWS() {
     myWebSocket.binaryType = "arraybuffer";
 
     myWebSocket.onmessage = function (event) {
-        if (event.data instanceof ArrayBuffer) {
-            $(wsVideo).attr('src', "data:image/jpeg;base64," + event.data);
-        } else {
-            console.log("failed to receive data");
+        // var urlObj = window.URL || window.webkitURL;
+        // var blob = new Blob([event.data], { type: 'image/jpeg' });
+        // var imgUrl = urlObj.createObjectURL(blob);
+
+        // document.getElementById('wsVideo').src = imgUrl;
+        var width = 640;
+        var height = 480;
+        const data = event.data;
+
+        // Verificar se os dados recebidos são da imagem RGB565
+        if (data.byteLength % 2 !== 0) {
+            // Os dados não são da imagem RGB565
+            return;
         }
-    }
+
+        // Converter os dados para um array de bytes
+        const byteArray = new Uint8Array(data);
+
+        // Processar a imagem RGB565
+        rgb565ToCanvas(byteArray, width, height);
+    };
 
     myWebSocket.onopen = function (evt) {
         console.log("onopen.");
