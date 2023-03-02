@@ -55,26 +55,6 @@
 
 //***************************************************************//
 
-#define CAMERA_MODEL_M5STACK_PSRAM
-#define CAM_PIN_PWDN 32  // power down is not used
-#define CAM_PIN_RESET -1 // software reset will be performed
-#define CAM_PIN_XCLK 21
-#define CAM_PIN_SIOD 26
-#define CAM_PIN_SIOC 27
-#define CAM_PIN_D7 35
-#define CAM_PIN_D6 34
-#define CAM_PIN_D5 39
-#define CAM_PIN_D4 36
-#define CAM_PIN_D3 21
-#define CAM_PIN_D2 19
-#define CAM_PIN_D1 18
-#define CAM_PIN_D0 5
-#define CAM_PIN_VSYNC 25
-#define CAM_PIN_HREF 23
-#define CAM_PIN_PCLK 22
-#define CONFIG_XCLK_FREQ 8000000
-#define PART_BOUNDARY "123456789000000000000987654321"
-
 #define MAX_WEB_SOCKETS 2
 
 #define MICROSTEP 1
@@ -119,10 +99,6 @@
 
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + CONFIG_SPIFFS_OBJ_NAME_LEN)
 #define SCRATCH_BUFSIZE 8192
-
-static const char *_STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" PART_BOUNDARY;
-static const char *_STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
-static const char *_STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n";
 
 void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt);
 uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt);
@@ -628,20 +604,20 @@ void img_stream(void *args)
             continue;
         }
 
-        // uint8_t *out;
-        // size_t out_len;
-        // int quality = 25;
+        uint8_t *out;
+        size_t out_len;
+        int quality = 20;
 
         ESP_LOGI(TAG, "Capture success");
-        // fmt2jpg(fb->buf, fb->len, fb->width, fb->height, fb->format, quality, &out, &out_len);
-        ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", fb->buf, fb->len);
-        // ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
-        // esp_camera_fb_return(fb);
+        fmt2jpg(fb->buf, fb->len, fb->width, fb->height, fb->format, quality, &out, &out_len);
+        // ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", fb->buf, fb->len);
+        ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
+        esp_camera_fb_return(fb);
 
-        ws_pkt.payload = fb->buf;
-        ws_pkt.len = fb->len;
-        // ws_pkt.payload = out;
-        // ws_pkt.len = out_len;
+        // ws_pkt.payload = fb->buf;
+        // ws_pkt.len = fb->len;
+        ws_pkt.payload = out;
+        ws_pkt.len = out_len;
         ws_pkt.type = HTTPD_WS_TYPE_BINARY;
 
         for (int i = 0; i < MAX_WEB_SOCKETS; i++)
@@ -689,8 +665,8 @@ void img_stream(void *args)
             ESP_LOGI(TAG, "No clients connected");
         }
 
-        esp_camera_fb_return(fb);
-        // free(out);
+        // esp_camera_fb_return(fb);
+        free(out);
         ESP_LOGI(TAG, "freeing camera buffer");
         int64_t fr_end = esp_timer_get_time();
         int64_t frame_time = fr_end - last_frame;
@@ -1106,13 +1082,13 @@ static esp_err_t init_camera(void)
     camera_config.pin_vsync = 25;
     camera_config.pin_href = 23;
     camera_config.pin_pclk = 22;
-    camera_config.xclk_freq_hz = 4000000;
+    camera_config.xclk_freq_hz = 12000000;
 
     camera_config.ledc_timer = LEDC_TIMER_0;
     camera_config.ledc_channel = LEDC_CHANNEL_0;
 
     camera_config.pixel_format = PIXFORMAT_RGB565;
-    camera_config.frame_size = FRAMESIZE_VGA;
+    camera_config.frame_size = FRAMESIZE_QVGA;
 
     camera_config.jpeg_quality = 12;
     camera_config.fb_count = 2;
