@@ -606,12 +606,13 @@ void img_stream(void *args)
 
         uint8_t *out;
         size_t out_len;
-        int quality = 20;
+        int quality = 12;
 
         ESP_LOGI(TAG, "Capture success");
         fmt2jpg(fb->buf, fb->len, fb->width, fb->height, fb->format, quality, &out, &out_len);
-        // ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", fb->buf, fb->len);
-        ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
+        // frame2bmp(fb, &out, &out_len);
+        ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", fb->buf, fb->len);
+        // ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
         esp_camera_fb_return(fb);
 
         // ws_pkt.payload = fb->buf;
@@ -1082,7 +1083,7 @@ static esp_err_t init_camera(void)
     camera_config.pin_vsync = 25;
     camera_config.pin_href = 23;
     camera_config.pin_pclk = 22;
-    camera_config.xclk_freq_hz = 12000000;
+    camera_config.xclk_freq_hz = 10000000;
 
     camera_config.ledc_timer = LEDC_TIMER_0;
     camera_config.ledc_channel = LEDC_CHANNEL_0;
@@ -1091,7 +1092,7 @@ static esp_err_t init_camera(void)
     camera_config.frame_size = FRAMESIZE_QVGA;
 
     camera_config.jpeg_quality = 12;
-    camera_config.fb_count = 2;
+    camera_config.fb_count = 4;
     camera_config.grab_mode = CAMERA_GRAB_LATEST; // CAMERA_GRAB_LATEST. Sets when buffers should be filled
 
     esp_err_t err = esp_camera_init(&camera_config);

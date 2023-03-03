@@ -17,8 +17,8 @@ var myWebSocket = undefined;
 var image_data = "";
 var start_time = 0;
 
-var width = 320;
-var height = 240;
+var width = 640;
+var height = 480;
 
 var last_time = 0;
 var now_time = 0;
@@ -307,33 +307,33 @@ function rgb565ToCanvas(rgb565Data, width, height) {
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext('2d');
-  
+
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = width;
     tempCanvas.height = height;
     const tempCtx = tempCanvas.getContext('2d');
-  
+
     const imageData = tempCtx.createImageData(width, height);
     const data = new Uint8ClampedArray(imageData.data.buffer);
-  
+
     const len = width * height;
     let p565 = 0;
     let p = 0;
-  
+
     for (let i = 0; i < len; i++) {
-      const rgb565 = (rgb565Data[p565] << 8) | rgb565Data[p565 + 1];
-      p565 += 2;
-  
-      data[p++] = (rgb565 >> 8) & 0xF8;
-      data[p++] = (rgb565 >> 3) & 0xFC;
-      data[p++] = (rgb565 << 3) & 0xF8;
-      data[p++] = 0xFF;
+        const rgb565 = (rgb565Data[p565] << 8) | rgb565Data[p565 + 1];
+        p565 += 2;
+
+        data[p++] = (rgb565 >> 8) & 0xF8;
+        data[p++] = (rgb565 >> 3) & 0xFC;
+        data[p++] = (rgb565 << 3) & 0xF8;
+        data[p++] = 0xFF;
     }
-  
+
     context.putImageData(imageData, 0, 0);
     const now_time = performance.now();
     const elapsed = now_time - last_time;
-    console.log(1000/elapsed);
+    console.log(1000 / elapsed);
     last_time = now_time;
 }
 
@@ -352,17 +352,14 @@ function connectToWS() {
     myWebSocket.binaryType = "arraybuffer";
 
     myWebSocket.onmessage = function (event) {
+        
+        
         var urlObj = window.URL || window.webkitURL;
         var blob = new Blob([event.data], { type: 'image/jpeg' });
         var imgUrl = urlObj.createObjectURL(blob);
         document.getElementById('wsVideo').src = imgUrl;
 
-        const now_time = performance.now();
-        const elapsed = now_time - last_time;
-        console.log(1000/elapsed);
-        last_time = now_time;
 
-        
         // // Verificar se os dados recebidos são da imagem RGB565
         // if (event.data.byteLength % 2 !== 0) {
         //     // Os dados não são da imagem RGB565
@@ -374,6 +371,12 @@ function connectToWS() {
 
         // // Processar a imagem RGB565
         // rgb565ToCanvas(byteArray, width, height);
+
+        const now_time = performance.now();
+        const elapsed = now_time - last_time;
+        console.log(1000 / elapsed);
+        last_time = now_time;
+
     };
 
     myWebSocket.onopen = function (evt) {
