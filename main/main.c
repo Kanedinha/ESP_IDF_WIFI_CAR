@@ -1111,30 +1111,30 @@ void peripherical_init()
 {
     esp_err_t err;
 
-    ledc_timer_config_t ledc_timer = {
-        .duty_resolution = LEDC_TIMER_10_BIT,
-        .freq_hz = 50,
-        .speed_mode = LEDC_HIGH_SPEED_MODE,
-        .timer_num = LEDC_TIMER_0,
-        .clk_cfg = LEDC_AUTO_CLK,
-    };
+    // ledc_timer_config_t ledc_timer = {
+    //     .duty_resolution = LEDC_TIMER_10_BIT,
+    //     .freq_hz = 50,
+    //     .speed_mode = LEDC_HIGH_SPEED_MODE,
+    //     .timer_num = LEDC_TIMER_0,
+    //     .clk_cfg = LEDC_AUTO_CLK,
+    // };
 
-    if (ledc_timer_config(&ledc_timer) != ESP_OK)
-        ESP_LOGE(TAG, "Timer ERROR !!!");
-    else
-        ESP_LOGI(TAG, "Timer init OK!");
+    // if (ledc_timer_config(&ledc_timer) != ESP_OK)
+    //     ESP_LOGE(TAG, "Timer ERROR !!!");
+    // else
+    //     ESP_LOGI(TAG, "Timer init OK!");
 
-    ledc_channel.channel = LEDC_CHANNEL_0;
-    ledc_channel.duty = 0;
-    ledc_channel.gpio_num = 2;
-    ledc_channel.speed_mode = LEDC_LOW_SPEED_MODE;
-    ledc_channel.hpoint = 0;
-    ledc_channel.timer_sel = LEDC_TIMER_0;
+    // ledc_channel.channel = LEDC_CHANNEL_0;
+    // ledc_channel.duty = 0;
+    // ledc_channel.gpio_num = 2;
+    // ledc_channel.speed_mode = LEDC_LOW_SPEED_MODE;
+    // ledc_channel.hpoint = 0;
+    // ledc_channel.timer_sel = LEDC_TIMER_0;
 
-    if (ledc_channel_config(&ledc_channel) != ESP_OK)
-        ESP_LOGE(TAG, "PWM ERROR !!!");
-    else
-        ESP_LOGI(TAG, "PWM init OK!");
+    // if (ledc_channel_config(&ledc_channel) != ESP_OK)
+    //     ESP_LOGE(TAG, "PWM ERROR !!!");
+    // else
+    //     ESP_LOGI(TAG, "PWM init OK!");
 
     // servo_config_t servo_cfg = {
     //     .max_angle = 180,
@@ -1171,11 +1171,11 @@ void peripherical_init()
     ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
-        .sda_io_num = I2C_MASTER_SDA_IO, // select GPIO specific to your project
-        .scl_io_num = I2C_MASTER_SCL_IO, // select GPIO specific to your project
+        .sda_io_num = 15, // select GPIO specific to your project
+        .scl_io_num = 14, // select GPIO specific to your project
         .sda_pullup_en = GPIO_PULLUP_ENABLE,
         .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = I2C_MASTER_FREQ_HZ, // select frequency specific to your project
+        .master.clk_speed = 40000, // select frequency specific to your project
         .clk_flags = 0,                         // you can use I2C_SCLK_SRC_FLAG_* flags to choose i2c source clock here
     };
     i2c_param_config(I2C_NUM_0, &conf);
@@ -1201,14 +1201,14 @@ void peripherical_init()
     // else
     //     ESP_LOGE(TAG, "BME280 ERROR !!!");
 
-    // ads1115_cfg.reg_cfg = ADS1115_CFG_LS_COMP_MODE_TRAD | // Comparator is traditional
-    //                       ADS1115_CFG_LS_COMP_LAT_NON |   // Comparator is non-latching
-    //                       ADS1115_CFG_LS_COMP_POL_LOW |   // Alert is active low
-    //                       ADS1115_CFG_LS_COMP_QUE_DIS |   // Compator is disabled
-    //                       ADS1115_CFG_LS_DR_1600SPS |     // No. of samples to take
-    //                       ADS1115_CFG_MS_MODE_SS;
-    // ads1115_cfg.dev_addr = 0x48;
-    // ADS1115_initiate(&ads1115_cfg);
+    ads1115_cfg.reg_cfg = ADS1115_CFG_LS_COMP_MODE_TRAD | // Comparator is traditional
+                          ADS1115_CFG_LS_COMP_LAT_NON |   // Comparator is non-latching
+                          ADS1115_CFG_LS_COMP_POL_LOW |   // Alert is active low
+                          ADS1115_CFG_LS_COMP_QUE_DIS |   // Compator is disabled
+                          ADS1115_CFG_LS_DR_1600SPS |     // No. of samples to take
+                          ADS1115_CFG_MS_MODE_SS;
+    ads1115_cfg.dev_addr = 0x48;
+    ADS1115_initiate(&ads1115_cfg);
 }
 
 void BME280_delay_msek(u32 msek)
@@ -1264,8 +1264,6 @@ void app_main()
 {
     esp_err_t ret;
 
-    // peripherical_init();
-
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
@@ -1293,6 +1291,7 @@ void app_main()
         ESP_LOGE(TAG, "web server ERROR !!!\n");
     }
 
+    peripherical_init();
     init_camera();
     ESP_LOGI(TAG, "DALE\n");
     ESP_ERROR_CHECK(ret);

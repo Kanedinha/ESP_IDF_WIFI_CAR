@@ -234,20 +234,20 @@ function direction_send() {
 $("body").ready(function () {
 
     // Funciona mas trocar por requisição GET
-    // 
-    // readBattery = setInterval(function () {
-    //     $.ajax({
-    //         type: "GET",
-    //         url: "/sensors/BatteryLevel",
-    //         success: function (result) {
-    //             Sensor = jQuery.parseJSON(result);
-    //             $("#battery").html('<p class="text">Battery: ' + (Sensor.BatLvL / 5 * 100).toFixed(2) + '% </p>');
-    //         },
-    //         error: function (result) {
-    //             console.log('Battery Level Sensor Error');
-    //         }
-    //     });
-    // }, 10000);
+    
+    readBattery = setInterval(function () {
+        $.ajax({
+            type: "GET",
+            url: "/sensors/BatteryLevel",
+            success: function (result) {
+                Sensor = jQuery.parseJSON(result);
+                $("#battery").html('<p class="text">Battery: ' + (Sensor.BatLvL / 5 * 100).toFixed(2) + '% </p>');
+            },
+            error: function (result) {
+                console.log('Battery Level Sensor Error');
+            }
+        });
+    }, 10000);
 
     // readTemperature = setInterval(function () {
     //     $.ajax({
