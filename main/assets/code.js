@@ -56,99 +56,99 @@ $("#esquerda1").mouseout(function () {
 
 // ---------------- 11,25 degrees ------------------//
 
-$("#direita10").mousedown(function () {
-    up = setInterval(function () {
-        dir = 128;
-        direction_send();
-    }, timeout);
-});
-$("#direita10").mouseup(function () {
-    clearInterval(up);
-    dir = 0;
-});
-$("#direita10").mouseout(function () {
-    clearInterval(up);
-    dir = 0;
-});
+// $("#direita10").mousedown(function () {
+//     up = setInterval(function () {
+//         dir = 128;
+//         direction_send();
+//     }, timeout);
+// });
+// $("#direita10").mouseup(function () {
+//     clearInterval(up);
+//     dir = 0;
+// });
+// $("#direita10").mouseout(function () {
+//     clearInterval(up);
+//     dir = 0;
+// });
 
-$("#esquerda10").mousedown(function () {
-    up = setInterval(function () {
-        dir = -128;
-        direction_send();
-    }, timeout);
-});
-$("#esquerda10").mouseup(function () {
-    clearInterval(up);
-    dir = 0;
-});
-$("#esquerda10").mouseout(function () {
-    clearInterval(up);
-    dir = 0;
-});
+// $("#esquerda10").mousedown(function () {
+//     up = setInterval(function () {
+//         dir = -128;
+//         direction_send();
+//     }, timeout);
+// });
+// $("#esquerda10").mouseup(function () {
+//     clearInterval(up);
+//     dir = 0;
+// });
+// $("#esquerda10").mouseout(function () {
+//     clearInterval(up);
+//     dir = 0;
+// });
 
-// ---------------- 90 degrees --------------------//
+// // ---------------- 90 degrees --------------------//
 
-$("#direita100").mousedown(function () {
-    up = setInterval(function () {
-        dir = 1024;
-        direction_send();
-    }, timeout);
-});
-$("#direita100").mouseup(function () {
-    clearInterval(up);
-    dir = 0;
-});
-$("#direita100").mouseout(function () {
-    clearInterval(up);
-    dir = 0;
-});
+// $("#direita100").mousedown(function () {
+//     up = setInterval(function () {
+//         dir = 1024;
+//         direction_send();
+//     }, timeout);
+// });
+// $("#direita100").mouseup(function () {
+//     clearInterval(up);
+//     dir = 0;
+// });
+// $("#direita100").mouseout(function () {
+//     clearInterval(up);
+//     dir = 0;
+// });
 
-$("#esquerda100").mousedown(function () {
-    up = setInterval(function () {
-        dir = -1024;
-        direction_send();
-    }, timeout);
-});
-$("#esquerda100").mouseup(function () {
-    clearInterval(up);
-    dir = 0;
-});
-$("#esquerda100").mouseout(function () {
-    clearInterval(up);
-    dir = 0;
-});
+// $("#esquerda100").mousedown(function () {
+//     up = setInterval(function () {
+//         dir = -1024;
+//         direction_send();
+//     }, timeout);
+// });
+// $("#esquerda100").mouseup(function () {
+//     clearInterval(up);
+//     dir = 0;
+// });
+// $("#esquerda100").mouseout(function () {
+//     clearInterval(up);
+//     dir = 0;
+// });
 
-// ---------------- 360 degrees --------------------//
+// // ---------------- 360 degrees --------------------//
 
-$("#direitaFull").mousedown(function () {
-    up = setInterval(function () {
-        dir = 4096;
-        direction_send();
-    }, timeout);
-});
-$("#direitaFull").mouseup(function () {
-    clearInterval(up);
-    dir = 0;
-});
-$("#direitaFull").mouseout(function () {
-    clearInterval(up);
-    dir = 0;
-});
+// $("#direitaFull").mousedown(function () {
+//     up = setInterval(function () {
+//         dir = 4096;
+//         direction_send();
+//     }, timeout);
+// });
+// $("#direitaFull").mouseup(function () {
+//     clearInterval(up);
+//     dir = 0;
+// });
+// $("#direitaFull").mouseout(function () {
+//     clearInterval(up);
+//     dir = 0;
+// });
 
-$("#esquerdaFull").mousedown(function () {
-    up = setInterval(function () {
-        dir = -4096;
-        direction_send();
-    }, timeout);
-});
-$("#esquerdaFull").mouseup(function () {
-    clearInterval(up);
-    dir = 0;
-});
-$("#esquerdaFull").mouseout(function () {
-    clearInterval(up);
-    dir = 0;
-});
+// $("#esquerdaFull").mousedown(function () {
+//     up = setInterval(function () {
+//         dir = -4096;
+//         direction_send();
+//     }, timeout);
+// });
+// $("#esquerdaFull").mouseup(function () {
+//     clearInterval(up);
+//     dir = 0;
+// });
+// $("#esquerdaFull").mouseout(function () {
+//     clearInterval(up);
+//     dir = 0;
+// });
 
 // ---------------- Forward speed --------------------//
 
@@ -374,7 +374,7 @@ function connectToWS() {
 
         const now_time = performance.now();
         const elapsed = now_time - last_time;
-        console.log(1000 / elapsed);
+        console.log("Fps: " + 1000/elapsed);
         last_time = now_time;
 
     };
