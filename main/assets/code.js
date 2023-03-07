@@ -17,8 +17,8 @@ var myWebSocket = undefined;
 var image_data = "";
 var start_time = 0;
 
-var width = 640;
-var height = 480;
+var width = 320;
+var height = 240;
 
 var last_time = 0;
 var now_time = 0;
@@ -234,7 +234,7 @@ function direction_send() {
 $("body").ready(function () {
 
     // Funciona mas trocar por requisição GET
-    
+
     readBattery = setInterval(function () {
         $.ajax({
             type: "GET",
@@ -249,19 +249,19 @@ $("body").ready(function () {
         });
     }, 10000);
 
-    // readTemperature = setInterval(function () {
-    //     $.ajax({
-    //         type: "GET",
-    //         url: "/sensors/Temperature",
-    //         success: function (result) {
-    //             Sensor = jQuery.parseJSON(result);
-    //             $("#temperature").html('<p class="text">Temperature: ' + Sensor.Temp.toFixed(2) + ' ºC</p>');
-    //         },
-    //         error: function (result) {
-    //             console.log('Temperature Sensor Error');
-    //         }
-    //     });
-    // }, 5000);
+    readTemperature = setInterval(function () {
+        $.ajax({
+            type: "GET",
+            url: "/sensors/Temperature",
+            success: function (result) {
+                Sensor = jQuery.parseJSON(result);
+                $("#temperature").html('<p class="text">Temperature: ' + Sensor.Temp.toFixed(2) + ' ºC</p>');
+            },
+            error: function (result) {
+                console.log('Temperature Sensor Error');
+            }
+        });
+    }, 5000);
 
     // readSpeed = setInterval(function () {
     //     $.ajax({
@@ -352,11 +352,12 @@ function connectToWS() {
     myWebSocket.binaryType = "arraybuffer";
 
     myWebSocket.onmessage = function (event) {
-        
-        
+
+        console.log("size:" + event.size);
         var urlObj = window.URL || window.webkitURL;
         var blob = new Blob([event.data], { type: 'image/jpeg' });
         var imgUrl = urlObj.createObjectURL(blob);
+
         document.getElementById('wsVideo').src = imgUrl;
 
 
@@ -374,7 +375,7 @@ function connectToWS() {
 
         const now_time = performance.now();
         const elapsed = now_time - last_time;
-        console.log("Fps: " + 1000/elapsed);
+        console.log("Fps: " + 1000 / elapsed);
         last_time = now_time;
 
     };

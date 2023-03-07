@@ -55,7 +55,7 @@
 
 //***************************************************************//
 
-#define MAX_WEB_SOCKETS 2
+#define MAX_WEB_SOCKETS 6
 
 #define MICROSTEP 1
 #define MAX_STEP 4096
@@ -606,13 +606,13 @@ void img_stream(void *args)
 
         uint8_t *out;
         size_t out_len;
-        int quality = 12;
+        int quality = 100;
 
         ESP_LOGI(TAG, "Capture success");
         fmt2jpg(fb->buf, fb->len, fb->width, fb->height, fb->format, quality, &out, &out_len);
         // frame2bmp(fb, &out, &out_len);
-        ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", fb->buf, fb->len);
-        // ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
+        // ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", fb->buf, fb->len);
+        ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
         esp_camera_fb_return(fb);
 
         // ws_pkt.payload = fb->buf;
@@ -628,7 +628,7 @@ void img_stream(void *args)
             if (fd != 0)
             {
                 httpd_ws_client_info_t info = httpd_ws_get_fd_info(server, fd);
-                // ESP_LOGI(TAG, " info:%d", info);
+                ESP_LOGI(TAG, " info:%d", info);
                 if (info == HTTPD_WS_CLIENT_WEBSOCKET)
                 {
                     cb_socket_args_t *args = malloc(sizeof(cb_socket_args_t));
@@ -1083,12 +1083,12 @@ static esp_err_t init_camera(void)
     camera_config.pin_vsync = 25;
     camera_config.pin_href = 23;
     camera_config.pin_pclk = 22;
-    camera_config.xclk_freq_hz = 10000000;
+    camera_config.xclk_freq_hz = 8000000;
 
     camera_config.ledc_timer = LEDC_TIMER_0;
     camera_config.ledc_channel = LEDC_CHANNEL_0;
 
-    camera_config.pixel_format = PIXFORMAT_RGB565;
+    camera_config.pixel_format = PIXFORMAT_GRAYSCALE;
     camera_config.frame_size = FRAMESIZE_QVGA;
 
     camera_config.jpeg_quality = 12;
@@ -1180,26 +1180,26 @@ void peripherical_init()
     };
     i2c_param_config(I2C_NUM_0, &conf);
 
-    // bme280.bus_write = i2c_write;
-    // bme280.bus_read = i2c_read;
-    // bme280.dev_addr = BME280_I2C_ADDRESS1;
-    // bme280.delay_msec = BME280_delay_msek;
+    bme280.bus_write = i2c_write;
+    bme280.bus_read = i2c_read;
+    bme280.dev_addr = BME280_I2C_ADDRESS1;
+    bme280.delay_msec = BME280_delay_msek;
 
-    // s32 com_rslt;
+    s32 com_rslt;
 
-    // com_rslt = bme280_init(&bme280);
-    // ESP_LOGI(TAG, "bme init: %d", com_rslt);
-    // com_rslt += bme280_set_oversamp_pressure(BME280_OVERSAMP_16X);
-    // ESP_LOGI(TAG, "bme press: %d", com_rslt);
-    // com_rslt += bme280_set_oversamp_temperature(BME280_OVERSAMP_2X);
-    // ESP_LOGI(TAG, "bme temp: %d", com_rslt);
+    com_rslt = bme280_init(&bme280);
+    ESP_LOGI(TAG, "bme init: %d", com_rslt);
+    com_rslt += bme280_set_oversamp_pressure(BME280_OVERSAMP_16X);
+    ESP_LOGI(TAG, "bme press: %d", com_rslt);
+    com_rslt += bme280_set_oversamp_temperature(BME280_OVERSAMP_2X);
+    ESP_LOGI(TAG, "bme temp: %d", com_rslt);
 
-    // com_rslt += bme280_set_power_mode(BME280_NORMAL_MODE);
-    // ESP_LOGI(TAG, "bme pwr mode: %d", com_rslt);
-    // if (com_rslt == SUCCESS)
-    //     ESP_LOGI(TAG, "BME280 init!");
-    // else
-    //     ESP_LOGE(TAG, "BME280 ERROR !!!");
+    com_rslt += bme280_set_power_mode(BME280_NORMAL_MODE);
+    ESP_LOGI(TAG, "bme pwr mode: %d", com_rslt);
+    if (com_rslt == SUCCESS)
+        ESP_LOGI(TAG, "BME280 init!");
+    else
+        ESP_LOGE(TAG, "BME280 ERROR !!!");
 
     ads1115_cfg.reg_cfg = ADS1115_CFG_LS_COMP_MODE_TRAD | // Comparator is traditional
                           ADS1115_CFG_LS_COMP_LAT_NON |   // Comparator is non-latching
