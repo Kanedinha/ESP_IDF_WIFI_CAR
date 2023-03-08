@@ -17,8 +17,8 @@ var myWebSocket = undefined;
 var image_data = "";
 var start_time = 0;
 
-var width = 320;
-var height = 240;
+var width = 640;
+var height = 480;
 
 var last_time = 0;
 var now_time = 0;
@@ -194,6 +194,8 @@ $("#wsDiscBtn").on('click', function () {
     myWebSocket.close();
 });
 
+//------------
+
 $("#Photo").on('click', function () {
     $.ajax({
         type: "GET",
@@ -280,61 +282,26 @@ $("body").ready(function () {
 
 });
 
-function rgb565ToCanvas(rgb565Data, width, height) {
-    // // Criar um canvas HTML temporário
-    // const canvas = document.getElementById('wsVideo');
-    // canvas.width = width;
-    // canvas.height = height;
-    // const context = canvas.getContext('2d');
-
-    // // Converter os dados RGB565 para RGB8
-    // const imageData = context.createImageData(width, height);
-    // for (let i = 0; i < width * height; i++) {
-    //     const rgb565 = (rgb565Data[i * 2] << 8) | rgb565Data[i * 2 + 1];
-    //     const r = (rgb565 >> 11) & 0x1F;
-    //     const g = (rgb565 >> 5) & 0x3F;
-    //     const b = rgb565 & 0x1F;
-    //     imageData.data[i * 4] = Math.round(r * 255 / 31);
-    //     imageData.data[i * 4 + 1] = Math.round(g * 255 / 63);
-    //     imageData.data[i * 4 + 2] = Math.round(b * 255 / 31);
-    //     imageData.data[i * 4 + 3] = 255;
-    // }
-
-    // // Renderize a imagem no canvas temporário
-    // context.putImageData(imageData, 0, 0);
-
+function rgb888ToCanvas(rgb565Data, width, height) {
+    
     const canvas = document.getElementById('wsVideo');
     canvas.width = width;
     canvas.height = height;
-    const context = canvas.getContext('2d');
-
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = width;
-    tempCanvas.height = height;
-    const tempCtx = tempCanvas.getContext('2d');
-
-    const imageData = tempCtx.createImageData(width, height);
-    const data = new Uint8ClampedArray(imageData.data.buffer);
-
-    const len = width * height;
-    let p565 = 0;
-    let p = 0;
-
-    for (let i = 0; i < len; i++) {
-        const rgb565 = (rgb565Data[p565] << 8) | rgb565Data[p565 + 1];
-        p565 += 2;
-
-        data[p++] = (rgb565 >> 8) & 0xF8;
-        data[p++] = (rgb565 >> 3) & 0xFC;
-        data[p++] = (rgb565 << 3) & 0xF8;
-        data[p++] = 0xFF;
+    
+    // Get the 2D context of the canvas
+    const ctx = canvas.getContext('2d');
+    
+    // Create a new ImageData object from the RGB888 data
+    const imgData = ctx.createImageData(width, height);
+    for (let i = 0, j = 0; i < imageData.length; i += 3, j += 4) {
+      imgData.data[j] = imageData[i + 2]; // R
+      imgData.data[j + 1] = imageData[i + 1]; // G
+      imgData.data[j + 2] = imageData[i]; // B
+      imgData.data[j + 3] = 255; // Alpha (fully opaque)
     }
-
-    context.putImageData(imageData, 0, 0);
-    const now_time = performance.now();
-    const elapsed = now_time - last_time;
-    console.log(1000 / elapsed);
-    last_time = now_time;
+    
+    // Draw the ImageData onto the canvas
+    ctx.putImageData(imgData, 0, 0);
 }
 
 
@@ -353,7 +320,7 @@ function connectToWS() {
 
     myWebSocket.onmessage = function (event) {
 
-        console.log("size:" + event.size);
+
         var urlObj = window.URL || window.webkitURL;
         var blob = new Blob([event.data], { type: 'image/jpeg' });
         var imgUrl = urlObj.createObjectURL(blob);
@@ -371,7 +338,7 @@ function connectToWS() {
         // const byteArray = new Uint8Array(event.data);
 
         // // Processar a imagem RGB565
-        // rgb565ToCanvas(byteArray, width, height);
+        // rgb888ToCanvas(byteArray, width, height);
 
         const now_time = performance.now();
         const elapsed = now_time - last_time;
@@ -392,3 +359,5 @@ function connectToWS() {
         console.log("Error!");
     };
 }
+
+

@@ -55,6 +55,12 @@
 
 //***************************************************************//
 
+#define PART_BOUNDARY "123456789000000000000987654321"
+static const char* _STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" PART_BOUNDARY;
+static const char* _STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
+static const char* _STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n";
+
+
 #define MAX_WEB_SOCKETS 6
 
 #define MICROSTEP 1
@@ -338,50 +344,69 @@ static esp_err_t root_handler(httpd_req_t *req)
 
 static esp_err_t camera_handler_function(httpd_req_t *req)
 {
-    camera_fb_t *fb = NULL;
+    //  camera_fb_t * fb = NULL;
+    // esp_err_t res = ESP_OK;
+    // size_t _jpg_buf_len;
+    // uint8_t * _jpg_buf;
+    // char * part_buf[64];
+    // static int64_t last_frame = 0;
+    // if(!last_frame) {
+    //     last_frame = esp_timer_get_time();
+    // }
 
-    fb = esp_camera_fb_get();
+    // res = httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
+    // if(res != ESP_OK){
+    //     return res;
+    // }
 
-    if (!fb)
-    {
-        ESP_LOGE(TAG, "Camera capture failed errno:%d - %s", errno, strerror(errno));
-        extern const uint8_t unavailable_start[] asm("_binary_unavailable_jpeg_start"); // uint8_t
-        extern const uint8_t unavailable_end[] asm("_binary_unavailable_jpeg_end");     // uint8_t
-        httpd_resp_set_type(req, "image/jpeg");
-        httpd_resp_send(req, (char *)unavailable_start, unavailable_end - unavailable_start - 1);
-    }
-    else
-    {
-        ESP_LOGI(TAG, "Capture success");
-        ESP_LOGI(TAG, "Format:%d - %d bytes", fb->format, fb->len);
-        uint8_t *out;
-        size_t out_len;
-        int quality = 100;
-        fmt2jpg(fb->buf, fb->len, fb->width, fb->height, fb->format, quality, &out, &out_len);
-        ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
-        esp_camera_fb_return(fb);
+    // while(true){
+    //     fb = esp_camera_fb_get();
+    //     if (!fb) {
+    //         ESP_LOGE(TAG, "Camera capture failed");
+    //         res = ESP_FAIL;
+    //         break;
+    //     }
+    //     if(fb->format != PIXFORMAT_JPEG){
+    //         bool jpeg_converted = frame2jpg(fb, 25, &_jpg_buf, &_jpg_buf_len);
+    //         if(!jpeg_converted){
+    //             ESP_LOGE(TAG, "JPEG compression failed");
+    //             esp_camera_fb_return(fb);
+    //             res = ESP_FAIL;
+    //         }
+    //     } else {
+    //         _jpg_buf_len = fb->len;
+    //         _jpg_buf = fb->buf;
+    //     }
 
-        httpd_resp_set_type(req, "image/jpeg");
-        httpd_resp_set_status(req, HTTPD_200);
-        httpd_resp_send_chunk(req, (char *)out, out_len);
+    //     if(res == ESP_OK){
+    //         res = httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY));
+    //     }
+    //     if(res == ESP_OK){
+    //         size_t hlen = snprintf((char *)part_buf, 64, _STREAM_PART, _jpg_buf_len);
 
-        // int chunk_size = 1 * 1024;
-        // for (int i = 0; i < out_len; i += chunk_size)
-        // {
-        //     int bytes_to_send = chunk_size;
-        //     if (i + chunk_size > out_len)
-        //     {
-        //         bytes_to_send = out_len - i + 1;
-        //     }
-        //     ESP_LOGI(TAG, "Sending %d/%d", i, out_len);
-        //     httpd_resp_set_type(req, "image/jpeg");
-        //     httpd_resp_set_status(req, HTTPD_200);
-        //     httpd_resp_send_chunk(req, (char *)out + i, bytes_to_send);
-        // }
-        httpd_resp_send_chunk(req, NULL, 0);
+    //         res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
+    //     }
+    //     if(res == ESP_OK){
+    //         res = httpd_resp_send_chunk(req, (const char *)_jpg_buf, _jpg_buf_len);
+    //     }
+    //     if(fb->format != PIXFORMAT_JPEG){
+    //         free(_jpg_buf);
+    //     }
+    //     esp_camera_fb_return(fb);
+    //     if(res != ESP_OK){
+    //         break;
+    //     }
+    //     int64_t fr_end = esp_timer_get_time();
+    //     int64_t frame_time = fr_end - last_frame;
+    //     last_frame = fr_end;
+    //     frame_time /= 1000;
+    //     ESP_LOGI(TAG, "MJPG: %luKB %lums (%.2ffps)",
+    //         (uint32_t)(_jpg_buf_len/1024),
+    //         (uint32_t)frame_time, 1000.0 / (uint32_t)frame_time);
+    // }
 
-        free(out);
-    }
+    // last_frame = 0;
+    // return res;
     return ESP_OK;
 }
 
@@ -606,13 +631,13 @@ void img_stream(void *args)
 
         uint8_t *out;
         size_t out_len;
-        int quality = 100;
+        int quality = 30;
 
-        ESP_LOGI(TAG, "Capture success");
+        // ESP_LOGI(TAG, "Capture success");
         fmt2jpg(fb->buf, fb->len, fb->width, fb->height, fb->format, quality, &out, &out_len);
         // frame2bmp(fb, &out, &out_len);
         // ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", fb->buf, fb->len);
-        ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
+        // ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
         esp_camera_fb_return(fb);
 
         // ws_pkt.payload = fb->buf;
@@ -628,17 +653,12 @@ void img_stream(void *args)
             if (fd != 0)
             {
                 httpd_ws_client_info_t info = httpd_ws_get_fd_info(server, fd);
-                ESP_LOGI(TAG, " info:%d", info);
+                // ESP_LOGI(TAG, " info:%d", info);
                 if (info == HTTPD_WS_CLIENT_WEBSOCKET)
                 {
-                    cb_socket_args_t *args = malloc(sizeof(cb_socket_args_t));
-                    args->socket_fd = fd;
-                    args->last_socket_fd = last_socket_id;
-                    args->data_ptr = ws_pkt.payload;
-
-                    esp_err_t err = httpd_ws_send_data_async(server, fd, &ws_pkt, &last_frame_callback, args);
-                    // esp_err_t err = ESP_OK;
-                    ESP_LOGI(TAG, "Sending %d bytes to client %d", ws_pkt.len, i);
+    
+                    esp_err_t err = httpd_ws_send_data(server, fd, &ws_pkt);
+                    // ESP_LOGI(TAG, "Sending %d bytes to client %d", ws_pkt.len, i);
                     if (err != ESP_OK)
                     {
                         for (int i = 0; i < 10; i++)
@@ -649,13 +669,12 @@ void img_stream(void *args)
                         if (fd == last_socket_id)
                         {
                             ESP_LOGE(TAG, "Last socket, freeing data");
-                            free(args);
                         }
                     }
                     else
                     {
-                        ESP_LOGI(TAG, "%d bytes sent to client %d", ws_pkt.len, i);
-                        ESP_LOGI(TAG, "data send");
+                        // ESP_LOGI(TAG, "%d bytes sent to client %d", ws_pkt.len, i);
+                        // ESP_LOGI(TAG, "data send");
                         n_clients++;
                     }
                 }
@@ -668,7 +687,7 @@ void img_stream(void *args)
 
         // esp_camera_fb_return(fb);
         free(out);
-        ESP_LOGI(TAG, "freeing camera buffer");
+        // ESP_LOGI(TAG, "freeing camera buffer");
         int64_t fr_end = esp_timer_get_time();
         int64_t frame_time = fr_end - last_frame;
         last_frame = fr_end;
@@ -1083,16 +1102,16 @@ static esp_err_t init_camera(void)
     camera_config.pin_vsync = 25;
     camera_config.pin_href = 23;
     camera_config.pin_pclk = 22;
-    camera_config.xclk_freq_hz = 8000000;
+    camera_config.xclk_freq_hz = 4000000;
 
     camera_config.ledc_timer = LEDC_TIMER_0;
     camera_config.ledc_channel = LEDC_CHANNEL_0;
 
     camera_config.pixel_format = PIXFORMAT_GRAYSCALE;
-    camera_config.frame_size = FRAMESIZE_QVGA;
+    camera_config.frame_size = FRAMESIZE_VGA;
 
     camera_config.jpeg_quality = 12;
-    camera_config.fb_count = 4;
+    camera_config.fb_count = 5;
     camera_config.grab_mode = CAMERA_GRAB_LATEST; // CAMERA_GRAB_LATEST. Sets when buffers should be filled
 
     esp_err_t err = esp_camera_init(&camera_config);
