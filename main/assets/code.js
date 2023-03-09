@@ -17,8 +17,8 @@ var myWebSocket = undefined;
 var image_data = "";
 var start_time = 0;
 
-var width = 640;
-var height = 480;
+var width = 320;
+var height = 240;
 
 var last_time = 0;
 var now_time = 0;
@@ -282,7 +282,7 @@ $("body").ready(function () {
 
 });
 
-function rgb888ToCanvas(rgb565Data, width, height) {
+function rgb565ToCanvas(rgb565Data, width, height) {
     
     const canvas = document.getElementById('wsVideo');
     canvas.width = width;
@@ -291,13 +291,16 @@ function rgb888ToCanvas(rgb565Data, width, height) {
     // Get the 2D context of the canvas
     const ctx = canvas.getContext('2d');
     
-    // Create a new ImageData object from the RGB888 data
-    const imgData = ctx.createImageData(width, height);
-    for (let i = 0, j = 0; i < imageData.length; i += 3, j += 4) {
-      imgData.data[j] = imageData[i + 2]; // R
-      imgData.data[j + 1] = imageData[i + 1]; // G
-      imgData.data[j + 2] = imageData[i]; // B
-      imgData.data[j + 3] = 255; // Alpha (fully opaque)
+    const imageData = context.createImageData(width, height);
+    for (let i = 0; i < width * height; i++) {
+      const rgb565 = (rgb565Data[i * 2] << 8) | rgb565Data[i * 2 + 1];
+      const r = (rgb565 >> 11) & 0x1F;
+      const g = (rgb565 >> 5) & 0x3F;
+      const b = rgb565 & 0x1F;
+      imageData.data[i * 4] = Math.round(r * 255 / 31);
+      imageData.data[i * 4 + 1] = Math.round(g * 255 / 63);
+      imageData.data[i * 4 + 2] = Math.round(b * 255 / 31);
+      imageData.data[i * 4 + 3] = 255;
     }
     
     // Draw the ImageData onto the canvas
@@ -338,7 +341,7 @@ function connectToWS() {
         // const byteArray = new Uint8Array(event.data);
 
         // // Processar a imagem RGB565
-        // rgb888ToCanvas(byteArray, width, height);
+        // rgb565ToCanvas(byteArray, width, height);
 
         const now_time = performance.now();
         const elapsed = now_time - last_time;

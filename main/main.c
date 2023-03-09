@@ -55,12 +55,6 @@
 
 //***************************************************************//
 
-#define PART_BOUNDARY "123456789000000000000987654321"
-static const char* _STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" PART_BOUNDARY;
-static const char* _STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
-static const char* _STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n";
-
-
 #define MAX_WEB_SOCKETS 6
 
 #define MICROSTEP 1
@@ -247,7 +241,7 @@ void move_direction(int16_t step)
 
     // ESP_LOGI(TAG, "step");
     vTaskDelay(10 / portTICK_PERIOD_MS);
-
+/*
     switch (pos_count % 8)
     {
     case 0:
@@ -298,7 +292,7 @@ void move_direction(int16_t step)
         gpio_set_level(COIL3, 0);
         gpio_set_level(COIL4, 1);
         break;
-    }
+    }*/
 }
 
 static const char *get_path_from_uri(char *dest, const char *base_path, const char *uri, size_t destsize)
@@ -339,74 +333,6 @@ static esp_err_t root_handler(httpd_req_t *req)
     httpd_resp_set_type(req, "page.html");
     httpd_resp_send(req, (char *)index_html_start, index_html_end - index_html_start - 1);
 
-    return ESP_OK;
-}
-
-static esp_err_t camera_handler_function(httpd_req_t *req)
-{
-    //  camera_fb_t * fb = NULL;
-    // esp_err_t res = ESP_OK;
-    // size_t _jpg_buf_len;
-    // uint8_t * _jpg_buf;
-    // char * part_buf[64];
-    // static int64_t last_frame = 0;
-    // if(!last_frame) {
-    //     last_frame = esp_timer_get_time();
-    // }
-
-    // res = httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
-    // if(res != ESP_OK){
-    //     return res;
-    // }
-
-    // while(true){
-    //     fb = esp_camera_fb_get();
-    //     if (!fb) {
-    //         ESP_LOGE(TAG, "Camera capture failed");
-    //         res = ESP_FAIL;
-    //         break;
-    //     }
-    //     if(fb->format != PIXFORMAT_JPEG){
-    //         bool jpeg_converted = frame2jpg(fb, 25, &_jpg_buf, &_jpg_buf_len);
-    //         if(!jpeg_converted){
-    //             ESP_LOGE(TAG, "JPEG compression failed");
-    //             esp_camera_fb_return(fb);
-    //             res = ESP_FAIL;
-    //         }
-    //     } else {
-    //         _jpg_buf_len = fb->len;
-    //         _jpg_buf = fb->buf;
-    //     }
-
-    //     if(res == ESP_OK){
-    //         res = httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY));
-    //     }
-    //     if(res == ESP_OK){
-    //         size_t hlen = snprintf((char *)part_buf, 64, _STREAM_PART, _jpg_buf_len);
-
-    //         res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
-    //     }
-    //     if(res == ESP_OK){
-    //         res = httpd_resp_send_chunk(req, (const char *)_jpg_buf, _jpg_buf_len);
-    //     }
-    //     if(fb->format != PIXFORMAT_JPEG){
-    //         free(_jpg_buf);
-    //     }
-    //     esp_camera_fb_return(fb);
-    //     if(res != ESP_OK){
-    //         break;
-    //     }
-    //     int64_t fr_end = esp_timer_get_time();
-    //     int64_t frame_time = fr_end - last_frame;
-    //     last_frame = fr_end;
-    //     frame_time /= 1000;
-    //     ESP_LOGI(TAG, "MJPG: %luKB %lums (%.2ffps)",
-    //         (uint32_t)(_jpg_buf_len/1024),
-    //         (uint32_t)frame_time, 1000.0 / (uint32_t)frame_time);
-    // }
-
-    // last_frame = 0;
-    // return res;
     return ESP_OK;
 }
 
@@ -631,20 +557,21 @@ void img_stream(void *args)
 
         uint8_t *out;
         size_t out_len;
-        int quality = 30;
+        int quality = 15;
 
         // ESP_LOGI(TAG, "Capture success");
         fmt2jpg(fb->buf, fb->len, fb->width, fb->height, fb->format, quality, &out, &out_len);
         // frame2bmp(fb, &out, &out_len);
         // ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", fb->buf, fb->len);
         // ESP_LOGI(TAG, "JPEG ptr: %p, jpeg_len:%d", out, out_len);
-        esp_camera_fb_return(fb);
 
         // ws_pkt.payload = fb->buf;
         // ws_pkt.len = fb->len;
         ws_pkt.payload = out;
         ws_pkt.len = out_len;
         ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+
+        esp_camera_fb_return(fb);
 
         for (int i = 0; i < MAX_WEB_SOCKETS; i++)
         {
@@ -685,14 +612,13 @@ void img_stream(void *args)
             ESP_LOGI(TAG, "No clients connected");
         }
 
-        // esp_camera_fb_return(fb);
         free(out);
         // ESP_LOGI(TAG, "freeing camera buffer");
         int64_t fr_end = esp_timer_get_time();
         int64_t frame_time = fr_end - last_frame;
         last_frame = fr_end;
         frame_time /= 1000;
-        ESP_LOGI(TAG, "MJPG: %lu KB (%.2ffps)", (uint32_t)(ws_pkt.len / 1024), 1000.0 / (uint32_t)frame_time);
+        ESP_LOGI(TAG, "MJPG: %lu KB (%.2f fps)", (uint32_t)(ws_pkt.len / 1024), 1000.0 / (uint32_t)frame_time);
     }
 }
 
@@ -795,7 +721,7 @@ static esp_err_t direction_handler(httpd_req_t *req)
     speed = cJSON_GetObjectItem(direction, "y")->valueint;
 
     ESP_LOGI(TAG, "steps: %d", steps);
-    ESP_LOGI(TAG, "speed: %d", speed);
+    ESP_LOGI(TAG, "speed: %d", speed);/*
     if (speed > 0)
     {
         gpio_set_level(H_BRIDGE_1, 1);
@@ -811,7 +737,7 @@ static esp_err_t direction_handler(httpd_req_t *req)
         gpio_set_level(H_BRIDGE_1, 0);
         gpio_set_level(H_BRIDGE_2, 0);
     }
-
+*/
     ESP_LOGI(TAG, "steps: %d", steps);
     if (abs(steps) != 0)
     {
@@ -1029,14 +955,6 @@ httpd_uri_t root_sensors_uri = {
     .is_websocket = false,
 };
 
-httpd_uri_t camera_handler = {
-    .uri = "/camera",
-    .method = HTTP_GET,
-    .handler = camera_handler_function,
-    .user_ctx = NULL,
-    .is_websocket = false,
-};
-
 httpd_uri_t root_ws_start_uri = {
     .uri = "/ws",
     .method = HTTP_GET,
@@ -1068,7 +986,7 @@ static httpd_handle_t web_server()
         httpd_register_uri_handler(server, &direction_uri);
         httpd_register_uri_handler(server, &root_uri);
         httpd_register_uri_handler(server, &root_ws_start_uri);
-        httpd_register_uri_handler(server, &camera_handler);
+
         return server;
     }
 
@@ -1102,16 +1020,16 @@ static esp_err_t init_camera(void)
     camera_config.pin_vsync = 25;
     camera_config.pin_href = 23;
     camera_config.pin_pclk = 22;
-    camera_config.xclk_freq_hz = 4000000;
+    camera_config.xclk_freq_hz = 5000000;
 
     camera_config.ledc_timer = LEDC_TIMER_0;
     camera_config.ledc_channel = LEDC_CHANNEL_0;
 
-    camera_config.pixel_format = PIXFORMAT_GRAYSCALE;
-    camera_config.frame_size = FRAMESIZE_VGA;
+    camera_config.pixel_format = PIXFORMAT_RGB565;
+    camera_config.frame_size = FRAMESIZE_QVGA;
 
     camera_config.jpeg_quality = 12;
-    camera_config.fb_count = 5;
+    camera_config.fb_count = 6;
     camera_config.grab_mode = CAMERA_GRAB_LATEST; // CAMERA_GRAB_LATEST. Sets when buffers should be filled
 
     esp_err_t err = esp_camera_init(&camera_config);
