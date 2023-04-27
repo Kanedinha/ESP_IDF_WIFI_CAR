@@ -212,89 +212,6 @@ static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filena
     return httpd_resp_set_type(req, "text/plain");
 }
 
-void move_direction(int16_t step)
-{
-    // se step - pos count--
-    //  * Step C0 C1 C2 C3
-    //  *    1  1  0  0  0
-    //  *    2  0  1  0  0
-    //  *    3  0  0  1  0
-    //  *    4  0  0  0  1
-
-    // for 1/2 step - pos count--
-    //  * Step C0 C1 C2 C3
-    //  *    1  1  0  0  0
-    //  *    2  1  1  0  0
-    //  *    3  0  1  0  0
-    //  *    4  0  1  1  0
-    //  *    5  0  0  1  0
-    //  *    6  0  0  1  1
-    //  *    7  0  0  0  1
-    //  *    8  1  0  0  1
-
-    pos_count += step;
-
-    if (pos_count < 0)
-        pos_count = MAX_STEP;
-    else if (pos_count >= MAX_STEP)
-        pos_count = 0;
-
-    // ESP_LOGI(TAG, "step");
-    vTaskDelay(10 / portTICK_PERIOD_MS);
-/*
-    switch (pos_count % 8)
-    {
-    case 0:
-        gpio_set_level(COIL1, 1);
-        gpio_set_level(COIL2, 0);
-        gpio_set_level(COIL3, 0);
-        gpio_set_level(COIL4, 0);
-        break;
-    case 1:
-        gpio_set_level(COIL1, 1);
-        gpio_set_level(COIL2, 1);
-        gpio_set_level(COIL3, 0);
-        gpio_set_level(COIL4, 0);
-        break;
-    case 2:
-        gpio_set_level(COIL1, 0);
-        gpio_set_level(COIL2, 1);
-        gpio_set_level(COIL3, 0);
-        gpio_set_level(COIL4, 0);
-        break;
-    case 3:
-        gpio_set_level(COIL1, 0);
-        gpio_set_level(COIL2, 1);
-        gpio_set_level(COIL3, 1);
-        gpio_set_level(COIL4, 0);
-        break;
-    case 4:
-        gpio_set_level(COIL1, 0);
-        gpio_set_level(COIL2, 0);
-        gpio_set_level(COIL3, 1);
-        gpio_set_level(COIL4, 0);
-        break;
-    case 5:
-        gpio_set_level(COIL1, 0);
-        gpio_set_level(COIL2, 0);
-        gpio_set_level(COIL3, 1);
-        gpio_set_level(COIL4, 1);
-        break;
-    case 6:
-        gpio_set_level(COIL1, 0);
-        gpio_set_level(COIL2, 0);
-        gpio_set_level(COIL3, 0);
-        gpio_set_level(COIL4, 1);
-        break;
-    default:
-        gpio_set_level(COIL1, 1);
-        gpio_set_level(COIL2, 0);
-        gpio_set_level(COIL3, 0);
-        gpio_set_level(COIL4, 1);
-        break;
-    }*/
-}
-
 static const char *get_path_from_uri(char *dest, const char *base_path, const char *uri, size_t destsize)
 {
     const size_t base_pathlen = strlen(base_path);
@@ -583,7 +500,7 @@ void img_stream(void *args)
                 // ESP_LOGI(TAG, " info:%d", info);
                 if (info == HTTPD_WS_CLIENT_WEBSOCKET)
                 {
-    
+
                     esp_err_t err = httpd_ws_send_data(server, fd, &ws_pkt);
                     // ESP_LOGI(TAG, "Sending %d bytes to client %d", ws_pkt.len, i);
                     if (err != ESP_OK)
@@ -720,53 +637,21 @@ static esp_err_t direction_handler(httpd_req_t *req)
     steps = cJSON_GetObjectItem(direction, "x")->valueint;
     speed = cJSON_GetObjectItem(direction, "y")->valueint;
 
-    ESP_LOGI(TAG, "steps: %d", steps);
-    ESP_LOGI(TAG, "speed: %d", speed);/*
-    if (speed > 0)
-    {
-        gpio_set_level(H_BRIDGE_1, 1);
-        gpio_set_level(H_BRIDGE_2, 0);
-    }
-    else if (speed < 0)
-    {
-        gpio_set_level(H_BRIDGE_1, 0);
-        gpio_set_level(H_BRIDGE_2, 1);
-    }
-    else
-    {
-        gpio_set_level(H_BRIDGE_1, 0);
-        gpio_set_level(H_BRIDGE_2, 0);
-    }
-*/
-    ESP_LOGI(TAG, "steps: %d", steps);
-    if (abs(steps) != 0)
-    {
-        // Como saber a condição inicial, no caso a última direção antes de ligar?
-        if (steps / abs(steps) != dir_step)
-        {
-            if (steps / abs(steps) == -1)
-            {
-                dir_step = -1;
-                steps -= STEP_COMPENSATOR;
-            }
-            else
-            {
-                dir_step = 1;
-                steps += STEP_COMPENSATOR;
-            }
-        }
-
-        ESP_LOGI(TAG, "steps: %d, calc: %d", steps, steps / abs(steps));
-        for (uint16_t i = 0; i < abs(steps); i++)
-        {
-            move_direction(steps / abs(steps));
-        }
-    }
-    // vTaskDelay(20 / portTICK_PERIOD_MS);
-    // i2cRet = i2c_read(AS5600, REG13, ang1, 1);
-    // i2cRet = i2c_read(AS5600, REG12, ang2, 1);
-    // angle = (*ang2 << 8) | (*ang1);
-    // ESP_LOGI(TAG, "%.12f;%.12f", (float)angle * 360 / 4095, (float)pos_count * DEGREE_PER_STEP / MICROSTEP);
+     if (speed > 0)
+     {
+         gpio_set_level(H_BRIDGE_1, 1);
+         gpio_set_level(H_BRIDGE_2, 0);
+     }
+     else if (speed < 0)
+     {
+         gpio_set_level(H_BRIDGE_1, 0);
+         gpio_set_level(H_BRIDGE_2, 1);
+     }
+     else
+     {
+         gpio_set_level(H_BRIDGE_1, 0);
+         gpio_set_level(H_BRIDGE_2, 0);
+     }
 
     // Cria objeto JSON para enviar como resposta
     cJSON *resp = cJSON_CreateObject();
@@ -1091,17 +976,9 @@ void peripherical_init()
     // };
     // iot_servo_init(LEDC_LOW_SPEED_MODE, &servo_cfg);
 
-    // gpio_set_direction(COIL1, GPIO_MODE_OUTPUT);
-    // gpio_set_direction(COIL2, GPIO_MODE_OUTPUT);
-    // gpio_set_direction(COIL3, GPIO_MODE_OUTPUT);
-    // gpio_set_direction(COIL4, GPIO_MODE_OUTPUT);
     // gpio_set_direction(H_BRIDGE_1, GPIO_MODE_OUTPUT);
     // gpio_set_direction(H_BRIDGE_2, GPIO_MODE_OUTPUT);
 
-    // gpio_set_level(COIL1, 0);
-    // gpio_set_level(COIL2, 0);
-    // gpio_set_level(COIL3, 0);
-    // gpio_set_level(COIL4, 0);
     // gpio_set_level(H_BRIDGE_1, 0);
     // gpio_set_level(H_BRIDGE_2, 0);
 
@@ -1113,7 +990,7 @@ void peripherical_init()
         .sda_pullup_en = GPIO_PULLUP_ENABLE,
         .scl_pullup_en = GPIO_PULLUP_ENABLE,
         .master.clk_speed = 40000, // select frequency specific to your project
-        .clk_flags = 0,                         // you can use I2C_SCLK_SRC_FLAG_* flags to choose i2c source clock here
+        .clk_flags = 0,            // you can use I2C_SCLK_SRC_FLAG_* flags to choose i2c source clock here
     };
     i2c_param_config(I2C_NUM_0, &conf);
 
@@ -1233,7 +1110,11 @@ void app_main()
     ESP_LOGI(TAG, "DALE\n");
     ESP_ERROR_CHECK(ret);
 
+    // xTaskCreate(&get_temperature, "get_temperature", 4, NULL, 5, NULL);
+    // xTaskCreate(&get_baterry_level,"get_baterry_level",4, NULL, 3, NULL);
+    // xTaskCreate(&get_speed,"get_speed", 4, NULL, 3, NULL);
     xTaskCreate(&img_stream, "img_stream", 4096, NULL, 20, NULL);
+
     while (1)
     {
         vTaskDelay(10);

@@ -38,7 +38,8 @@
         "regex": "c",
         "esp_vfs.h": "c",
         "esp_log.h": "c",
-        "*.tcc": "cpp"
+        "*.tcc": "cpp",
+        "freertos.h": "c"
     }
 }
  
