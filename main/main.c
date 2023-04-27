@@ -70,8 +70,8 @@
 
 #define SERVO_CH0_PIN 12
 
-#define EXAMPLE_ESP_WIFI_SSID "Projetos"
-#define EXAMPLE_ESP_WIFI_PASS "ftn22182"
+#define EXAMPLE_ESP_WIFI_SSID "your wifi ssid"
+#define EXAMPLE_ESP_WIFI_PASS "password"
 #define EXAMPLE_ESP_MAXIMUM_RETRY 10
 
 #define WIFI_CONNECTED_BIT BIT0
