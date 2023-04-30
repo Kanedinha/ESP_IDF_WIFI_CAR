@@ -62,8 +62,8 @@
 
 #define SERVO_CH0_PIN 33
 
-#define EXAMPLE_ESP_WIFI_SSID "VIVOFIBRA-EBB0"
-#define EXAMPLE_ESP_WIFI_PASS "C1A75F2A3B"
+#define EXAMPLE_ESP_WIFI_SSID "SSID"
+#define EXAMPLE_ESP_WIFI_PASS "PASSWORD"
 #define EXAMPLE_ESP_MAXIMUM_RETRY 10
 
 #define WIFI_CONNECTED_BIT BIT0
@@ -438,7 +438,7 @@ void img_stream(void *args)
 
         uint8_t *out;
         size_t out_len;
-        int quality = 15;
+        int quality = 60;
 
         // ESP_LOGI(TAG, "Capture success");
         fmt2jpg(fb->buf, fb->len, fb->width, fb->height, fb->format, quality, &out, &out_len);
