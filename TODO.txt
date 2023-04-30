@@ -3,8 +3,5 @@ quem faz o sensoriamento serão as tasks.
 
 adicionar os semaphoros para cada task e eventos (eventos caso dê para aplicar)
 
-xSemaphoreCreateBinary(void)
-xSemaphoreCreateMutex(void)
-xSemaphoreGive(QueueHandle_t handle)
-xSemaphoreTake(QueueHandle_t handle, TickType_t pvTask)
+
 

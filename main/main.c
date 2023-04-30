@@ -55,31 +55,23 @@
 
 //***************************************************************//
 
-#define MAX_WEB_SOCKETS 6
+#define MAX_WEB_SOCKETS 4
 
-#define MICROSTEP 1
-#define MAX_STEP 4096
-#define DEGREE_PER_STEP 360 / MAX_STEP
-#define STEP_COMPENSATOR 36
-#define COIL1 32
-#define COIL2 33
-#define COIL3 25
-#define COIL4 26
-#define H_BRIDGE_1 27
-#define H_BRIDGE_2 14
+#define H_BRIDGE_1 16
+#define H_BRIDGE_2 17
 
-#define SERVO_CH0_PIN 12
+#define SERVO_CH0_PIN 33
 
-#define EXAMPLE_ESP_WIFI_SSID "your wifi ssid"
-#define EXAMPLE_ESP_WIFI_PASS "password"
+#define EXAMPLE_ESP_WIFI_SSID "VIVOFIBRA-EBB0"
+#define EXAMPLE_ESP_WIFI_PASS "C1A75F2A3B"
 #define EXAMPLE_ESP_MAXIMUM_RETRY 10
 
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 
 #define I2C_MASTER_FREQ_HZ 40000
-#define I2C_MASTER_SDA_IO 21
-#define I2C_MASTER_SCL_IO 22
+#define I2C_MASTER_SDA_IO 15
+#define I2C_MASTER_SCL_IO 14
 #define AS5600 0x36
 #define REG12 0X0C
 #define REG13 0X0D
@@ -104,6 +96,7 @@ void i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cn
 uint8_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt);
 void BME280_delay_msek(u32 msek);
 static esp_err_t init_camera(void);
+void get_temperature();
 
 static httpd_handle_t server = NULL;
 static QueueHandle_t out_msg_queue;
@@ -326,13 +319,6 @@ static esp_err_t root_sensors_handler(httpd_req_t *req)
 {
     if (strcasecmp((char *)req->uri, "/sensors/BatteryLevel") == 0)
     {
-        uint16_t adc_read = 0;
-        ADS1115_request_single_ended_AIN1();
-        while (!ADS1115_get_conversion_state())
-            vTaskDelay(1 / portTICK_PERIOD_MS);
-        adc_read = ADS1115_get_conversion();
-        batteryLevel = adc_read * ADS1115_LSB_SIZE;
-        ESP_LOGI(TAG, "BatLvL: %.2f V", batteryLevel);
         cJSON *resp = cJSON_CreateObject();
         cJSON_AddNumberToObject(resp, "BatLvL", batteryLevel);
 
@@ -347,34 +333,17 @@ static esp_err_t root_sensors_handler(httpd_req_t *req)
     }
     else if (strcasecmp((char *)req->uri, "/sensors/Temperature") == 0)
     {
-        s32 com_rslt;
-        s32 v_uncomp_pressure_s32;
-        s32 v_uncomp_temperature_s32;
-        s32 v_uncomp_humidity_s32;
+        cJSON *resp = cJSON_CreateObject();
+        cJSON_AddNumberToObject(resp, "Temp", temperature);
 
-        com_rslt = bme280_read_uncomp_pressure_temperature_humidity(&v_uncomp_pressure_s32, &v_uncomp_temperature_s32, &v_uncomp_humidity_s32);
+        char *buff = malloc(sizeof(resp) + 1);
+        memset(buff, 0x00, sizeof(resp) + 1);
 
-        if (com_rslt == SUCCESS)
-        {
-            double temp = bme280_compensate_temperature_double(v_uncomp_temperature_s32);
-            temperature = (float)temp;
-            ESP_LOGI(TAG, "temp: %.2f", temp);
-            cJSON *resp = cJSON_CreateObject();
-            cJSON_AddNumberToObject(resp, "Temp", temperature);
+        buff = cJSON_Print(resp);
 
-            char *buff = malloc(sizeof(resp) + 1);
-            memset(buff, 0x00, sizeof(resp) + 1);
-
-            buff = cJSON_Print(resp);
-
-            httpd_resp_send(req, buff, strlen(buff));
-            cJSON_Delete(resp);
-            free(buff);
-        }
-        else
-        {
-            ESP_LOGI(TAG, "BME Bad reading: %d", com_rslt);
-        }
+        httpd_resp_send(req, buff, strlen(buff));
+        cJSON_Delete(resp);
+        free(buff);
     }
     else if (strcasecmp((char *)req->uri, "/sensors/Speed") == 0)
     {
@@ -410,13 +379,8 @@ static void initialise_mdns(void)
 
 void last_frame_callback(esp_err_t err, int socket, void *arg)
 {
-    // cb_socket_args_t *cb_args = (cb_socket_args_t *)arg;
-    // if (cb_args->socket_fd == cb_args->last_socket_fd)
-    // {
-    //     // ESP_LOGI(TAG, "frame callback was ");
-    //     // heap_caps_free(cb_args->data_ptr);
-    // }
-    // free(arg);
+    // do nothing
+    // precisa de nada naum
 }
 
 void img_stream(void *args)
@@ -539,6 +503,44 @@ void img_stream(void *args)
     }
 }
 
+void get_temperature(void *args)
+{
+    s32 com_rslt;
+    s32 v_uncomp_pressure_s32;
+    s32 v_uncomp_temperature_s32;
+    s32 v_uncomp_humidity_s32;
+    com_rslt = bme280_read_uncomp_pressure_temperature_humidity(&v_uncomp_pressure_s32, &v_uncomp_temperature_s32, &v_uncomp_humidity_s32);
+    while (1)
+    {
+        if (com_rslt == SUCCESS)
+        {
+            double temp = bme280_compensate_temperature_double(v_uncomp_temperature_s32);
+            temperature = (float)temp;
+            ESP_LOGI(TAG, "temp: %.2f", temperature);
+        }
+        else
+        {
+            ESP_LOGI(TAG, "BME Bad reading: %d", com_rslt);
+        }
+        vTaskDelay(250);
+    }
+}
+
+void get_baterry_level(void *args)
+{
+    uint16_t adc_read = 0;
+    while (1)
+    {
+        ADS1115_request_single_ended_AIN1();
+        while (!ADS1115_get_conversion_state())
+            vTaskDelay(1 / portTICK_PERIOD_MS);
+        adc_read = ADS1115_get_conversion();
+        batteryLevel = adc_read * ADS1115_LSB_SIZE;
+        ESP_LOGI(TAG, "Battery level: %.2f", batteryLevel);
+        vTaskDelay(1000);
+    }
+}
+
 static void ws_async_send(void *arg)
 {
     static const char *data = "Async data";
@@ -637,25 +639,24 @@ static esp_err_t direction_handler(httpd_req_t *req)
     steps = cJSON_GetObjectItem(direction, "x")->valueint;
     speed = cJSON_GetObjectItem(direction, "y")->valueint;
 
-     if (speed > 0)
-     {
-         gpio_set_level(H_BRIDGE_1, 1);
-         gpio_set_level(H_BRIDGE_2, 0);
-     }
-     else if (speed < 0)
-     {
-         gpio_set_level(H_BRIDGE_1, 0);
-         gpio_set_level(H_BRIDGE_2, 1);
-     }
-     else
-     {
-         gpio_set_level(H_BRIDGE_1, 0);
-         gpio_set_level(H_BRIDGE_2, 0);
-     }
+    if (speed > 0)
+    {
+        gpio_set_level(H_BRIDGE_1, 1);
+        gpio_set_level(H_BRIDGE_2, 0);
+    }
+    else if (speed < 0)
+    {
+        gpio_set_level(H_BRIDGE_1, 0);
+        gpio_set_level(H_BRIDGE_2, 1);
+    }
+    else
+    {
+        gpio_set_level(H_BRIDGE_1, 0);
+        gpio_set_level(H_BRIDGE_2, 0);
+    }
 
     // Cria objeto JSON para enviar como resposta
     cJSON *resp = cJSON_CreateObject();
-    cJSON_AddNumberToObject(resp, "x", (float)pos_count * DEGREE_PER_STEP / MICROSTEP);
 
     // alocação do buffer
     // LEMBRAR DE LIBERAR A MEMÓRIA FREE(VAR) !!!!!!!
@@ -905,7 +906,7 @@ static esp_err_t init_camera(void)
     camera_config.pin_vsync = 25;
     camera_config.pin_href = 23;
     camera_config.pin_pclk = 22;
-    camera_config.xclk_freq_hz = 5000000;
+    camera_config.xclk_freq_hz = 4000000;
 
     camera_config.ledc_timer = LEDC_TIMER_0;
     camera_config.ledc_channel = LEDC_CHANNEL_0;
@@ -1110,10 +1111,10 @@ void app_main()
     ESP_LOGI(TAG, "DALE\n");
     ESP_ERROR_CHECK(ret);
 
-    // xTaskCreate(&get_temperature, "get_temperature", 4, NULL, 5, NULL);
-    // xTaskCreate(&get_baterry_level,"get_baterry_level",4, NULL, 3, NULL);
+    xTaskCreate(&get_temperature, "get_temperature", 2046, NULL, 5, NULL);
+    xTaskCreate(&get_baterry_level, "get_baterry_level", 2046, NULL, 3, NULL);
     // xTaskCreate(&get_speed,"get_speed", 4, NULL, 3, NULL);
-    xTaskCreate(&img_stream, "img_stream", 4096, NULL, 20, NULL);
+    xTaskCreate(&img_stream, "img_stream", 16384, NULL, 20, NULL);
 
     while (1)
     {
