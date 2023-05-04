@@ -458,6 +458,14 @@
       {
         "netclass": "power",
         "pattern": "+12V"
+      },
+      {
+        "netclass": "power",
+        "pattern": "+BATT"
+      },
+      {
+        "netclass": "power",
+        "pattern": "VDD"
       }
     ]
   },
