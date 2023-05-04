@@ -31,6 +31,7 @@
 
 #include "driver/i2c.h"
 #include "driver/ledc.h"
+#include "driver/gpio.h"
 #include "iot_servo.h"
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
@@ -60,10 +61,10 @@
 #define H_BRIDGE_1 16
 #define H_BRIDGE_2 17
 
-#define SERVO_CH0_PIN 33
+#define SERVO_CH0_PIN 4
 
-#define EXAMPLE_ESP_WIFI_SSID "SSID"
-#define EXAMPLE_ESP_WIFI_PASS "PASSWORD"
+#define EXAMPLE_ESP_WIFI_SSID "VIVOFIBRA-EBB0"
+#define EXAMPLE_ESP_WIFI_PASS "C1A75F2A3B"
 #define EXAMPLE_ESP_MAXIMUM_RETRY 10
 
 #define WIFI_CONNECTED_BIT BIT0
@@ -509,9 +510,9 @@ void get_temperature(void *args)
     s32 v_uncomp_pressure_s32;
     s32 v_uncomp_temperature_s32;
     s32 v_uncomp_humidity_s32;
-    com_rslt = bme280_read_uncomp_pressure_temperature_humidity(&v_uncomp_pressure_s32, &v_uncomp_temperature_s32, &v_uncomp_humidity_s32);
     while (1)
     {
+        com_rslt = bme280_read_uncomp_pressure_temperature_humidity(&v_uncomp_pressure_s32, &v_uncomp_temperature_s32, &v_uncomp_humidity_s32);
         if (com_rslt == SUCCESS)
         {
             double temp = bme280_compensate_temperature_double(v_uncomp_temperature_s32);
@@ -654,6 +655,16 @@ static esp_err_t direction_handler(httpd_req_t *req)
         gpio_set_level(H_BRIDGE_1, 0);
         gpio_set_level(H_BRIDGE_2, 0);
     }
+
+    // if(steps > 0){
+    //     iot_servo_write_angle(LEDC_LOW_SPEED_MODE, 0,10);
+    // }
+    // if(steps < 0){
+    //     iot_servo_write_angle(LEDC_LOW_SPEED_MODE, 0,80);
+    // }
+    // if(steps == 0){
+    //     iot_servo_write_angle(LEDC_LOW_SPEED_MODE, 0,45);
+    // }
 
     // Cria objeto JSON para enviar como resposta
     cJSON *resp = cJSON_CreateObject();
@@ -888,22 +899,22 @@ static esp_err_t stop_webserver(httpd_handle_t server)
 
 static esp_err_t init_camera(void)
 {
-    camera_config.pin_pwdn = 32;
+    camera_config.pin_pwdn = 21;
     camera_config.pin_reset = -1;
     camera_config.pin_xclk = 13;
-    camera_config.pin_sccb_sda = 26;
-    camera_config.pin_sccb_scl = 27;
+    camera_config.pin_sccb_sda = 12;
+    camera_config.pin_sccb_scl = 14;
 
-    camera_config.pin_d7 = 35;
-    camera_config.pin_d6 = 34;
-    camera_config.pin_d5 = 39;
-    camera_config.pin_d4 = 36;
-    camera_config.pin_d3 = 21;
-    camera_config.pin_d2 = 19;
-    camera_config.pin_d1 = 18;
-    camera_config.pin_d0 = 5;
+    camera_config.pin_d7 = 26;
+    camera_config.pin_d6 = 25;
+    camera_config.pin_d5 = 33;
+    camera_config.pin_d4 = 32;
+    camera_config.pin_d3 = 35;
+    camera_config.pin_d2 = 34;
+    camera_config.pin_d1 = 39;
+    camera_config.pin_d0 = 36;
 
-    camera_config.pin_vsync = 25;
+    camera_config.pin_vsync = 27;
     camera_config.pin_href = 23;
     camera_config.pin_pclk = 22;
     camera_config.xclk_freq_hz = 4000000;
@@ -986,8 +997,8 @@ void peripherical_init()
     ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
-        .sda_io_num = 15, // select GPIO specific to your project
-        .scl_io_num = 14, // select GPIO specific to your project
+        .sda_io_num = 18, // select GPIO specific to your project
+        .scl_io_num = 19, // select GPIO specific to your project
         .sda_pullup_en = GPIO_PULLUP_ENABLE,
         .scl_pullup_en = GPIO_PULLUP_ENABLE,
         .master.clk_speed = 40000, // select frequency specific to your project

@@ -26,7 +26,7 @@ var now_time = 0;
 // ---------------- ~1 degree --------------------//
 $("#direita1").mousedown(function () {
     up = setInterval(function () {
-        dir = 12;
+        dir = 1;
         direction_send();
     }, timeout);
 });
@@ -41,7 +41,7 @@ $("#direita1").mouseout(function () {
 
 $("#esquerda1").mousedown(function () {
     up = setInterval(function () {
-        dir = -12;
+        dir = -1;
         direction_send();
     }, timeout);
 });
