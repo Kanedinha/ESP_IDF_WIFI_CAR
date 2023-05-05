@@ -56,7 +56,7 @@
 
 //***************************************************************//
 
-#define MAX_WEB_SOCKETS 4
+#define MAX_WEB_SOCKETS 5
 
 #define H_BRIDGE_1 16
 #define H_BRIDGE_2 17
@@ -64,7 +64,7 @@
 #define SERVO_CH0_PIN 4
 
 #define EXAMPLE_ESP_WIFI_SSID "SSID"
-#define EXAMPLE_ESP_WIFI_PASS "password"
+#define EXAMPLE_ESP_WIFI_PASS "PASSWORD"
 #define EXAMPLE_ESP_MAXIMUM_RETRY 10
 
 #define WIFI_CONNECTED_BIT BIT0
@@ -614,11 +614,6 @@ static esp_err_t ws_handler(httpd_req_t *req)
 static esp_err_t direction_handler(httpd_req_t *req)
 {
     int8_t i2cRet;
-    uint8_t *ang1 = malloc(sizeof(uint8_t));
-    uint8_t *ang2 = malloc(sizeof(uint8_t));
-    uint16_t angle = 0;
-    memset(ang1, 0x00, sizeof(uint8_t));
-    memset(ang2, 0x00, sizeof(uint8_t));
 
     int16_t steps;
     // tamanho do conteúdo recebido pelo POST
@@ -640,31 +635,31 @@ static esp_err_t direction_handler(httpd_req_t *req)
     steps = cJSON_GetObjectItem(direction, "x")->valueint;
     speed = cJSON_GetObjectItem(direction, "y")->valueint;
 
-    if (speed > 0)
-    {
-        gpio_set_level(H_BRIDGE_1, 1);
-        gpio_set_level(H_BRIDGE_2, 0);
-    }
-    else if (speed < 0)
-    {
-        gpio_set_level(H_BRIDGE_1, 0);
-        gpio_set_level(H_BRIDGE_2, 1);
-    }
-    else
-    {
-        gpio_set_level(H_BRIDGE_1, 0);
-        gpio_set_level(H_BRIDGE_2, 0);
-    }
+    // if (speed > 0)
+    // {
+    //     gpio_set_level(H_BRIDGE_1, 1);
+    //     gpio_set_level(H_BRIDGE_2, 0);
+    // }
+    // else if (speed < 0)
+    // {
+    //     gpio_set_level(H_BRIDGE_1, 0);
+    //     gpio_set_level(H_BRIDGE_2, 1);
+    // }
+    // else
+    // {
+    //     gpio_set_level(H_BRIDGE_1, 0);
+    //     gpio_set_level(H_BRIDGE_2, 0);
+    // }
 
-    // if(steps > 0){
-    //     iot_servo_write_angle(LEDC_LOW_SPEED_MODE, 0,10);
-    // }
-    // if(steps < 0){
-    //     iot_servo_write_angle(LEDC_LOW_SPEED_MODE, 0,80);
-    // }
-    // if(steps == 0){
-    //     iot_servo_write_angle(LEDC_LOW_SPEED_MODE, 0,45);
-    // }
+    if(steps > 0){
+        iot_servo_write_angle(LEDC_LOW_SPEED_MODE, 0,10);
+    }
+    if(steps < 0){
+        iot_servo_write_angle(LEDC_LOW_SPEED_MODE, 0,80);
+    }
+    if(steps == 0){
+        iot_servo_write_angle(LEDC_LOW_SPEED_MODE, 0,45);
+    }
 
     // Cria objeto JSON para enviar como resposta
     cJSON *resp = cJSON_CreateObject();
@@ -945,48 +940,52 @@ void peripherical_init()
 {
     esp_err_t err;
 
-    // ledc_timer_config_t ledc_timer = {
-    //     .duty_resolution = LEDC_TIMER_10_BIT,
-    //     .freq_hz = 50,
-    //     .speed_mode = LEDC_HIGH_SPEED_MODE,
-    //     .timer_num = LEDC_TIMER_0,
-    //     .clk_cfg = LEDC_AUTO_CLK,
-    // };
+    ledc_timer_config_t ledc_timer = {
+        .duty_resolution = LEDC_TIMER_10_BIT,
+        .freq_hz = 50,
+        .speed_mode = LEDC_HIGH_SPEED_MODE,
+        .timer_num = LEDC_TIMER_0,
+        .clk_cfg = LEDC_AUTO_CLK,
+    };
 
-    // if (ledc_timer_config(&ledc_timer) != ESP_OK)
-    //     ESP_LOGE(TAG, "Timer ERROR !!!");
-    // else
-    //     ESP_LOGI(TAG, "Timer init OK!");
+    if (ledc_timer_config(&ledc_timer) != ESP_OK)
+        ESP_LOGE(TAG, "Timer ERROR !!!");
+    else
+        ESP_LOGI(TAG, "Timer init OK!");
 
-    // ledc_channel.channel = LEDC_CHANNEL_0;
-    // ledc_channel.duty = 0;
-    // ledc_channel.gpio_num = 2;
-    // ledc_channel.speed_mode = LEDC_LOW_SPEED_MODE;
-    // ledc_channel.hpoint = 0;
-    // ledc_channel.timer_sel = LEDC_TIMER_0;
+    ledc_channel.channel = LEDC_CHANNEL_0;
+    ledc_channel.duty = 0;
+    ledc_channel.gpio_num = 4;
+    ledc_channel.speed_mode = LEDC_LOW_SPEED_MODE;
+    ledc_channel.hpoint = 0;
+    ledc_channel.timer_sel = LEDC_TIMER_0;
+    ledc_channel.intr_type = LEDC_INTR_DISABLE;
 
-    // if (ledc_channel_config(&ledc_channel) != ESP_OK)
-    //     ESP_LOGE(TAG, "PWM ERROR !!!");
-    // else
-    //     ESP_LOGI(TAG, "PWM init OK!");
+    if (ledc_channel_config(&ledc_channel) != ESP_OK)
+        ESP_LOGE(TAG, "PWM ERROR !!!");
+    else
+        ESP_LOGI(TAG, "PWM init OK!");
 
-    // servo_config_t servo_cfg = {
-    //     .max_angle = 180,
-    //     .min_width_us = 500,
-    //     .max_width_us = 2500,
-    //     .freq = 50,
-    //     .timer_number = LEDC_TIMER_0,
-    //     .channels = {
-    //         .servo_pin = {
-    //             SERVO_CH0_PIN,
-    //         },
-    //         .ch = {
-    //             LEDC_CHANNEL_0,
-    //         },
-    //     },
-    //     .channel_number = 1,
-    // };
-    // iot_servo_init(LEDC_LOW_SPEED_MODE, &servo_cfg);
+    servo_config_t servo_cfg = {
+        .max_angle = 180,
+        .min_width_us = 500,
+        .max_width_us = 2500,
+        .freq = 50,
+        .timer_number = LEDC_TIMER_0,
+        .channels = {
+            .servo_pin = {
+                SERVO_CH0_PIN,
+            },
+            .ch = {
+                LEDC_CHANNEL_0,
+            },
+        },
+        .channel_number = 1,
+    };
+    if(iot_servo_init(LEDC_LOW_SPEED_MODE, &servo_cfg) != ESP_OK)
+        ESP_LOGE(TAG, "servo ERROR !!!");
+    else
+        ESP_LOGI(TAG, "servo init OK!");
 
     // gpio_set_direction(H_BRIDGE_1, GPIO_MODE_OUTPUT);
     // gpio_set_direction(H_BRIDGE_2, GPIO_MODE_OUTPUT);
