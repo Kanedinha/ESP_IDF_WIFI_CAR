@@ -7,3 +7,5 @@ package-lock.json
 package.json
 espressif__mdns/**
 dependencies.lock
+main/build/CMakeCache.txt
+main/build/**
