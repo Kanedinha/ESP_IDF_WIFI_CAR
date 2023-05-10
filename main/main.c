@@ -63,8 +63,8 @@
 
 #define SERVO_CH0_PIN 4
 
-#define EXAMPLE_ESP_WIFI_SSID "SSID"
-#define EXAMPLE_ESP_WIFI_PASS "PASSWORD"
+#define EXAMPLE_ESP_WIFI_SSID "agora vai"
+#define EXAMPLE_ESP_WIFI_PASS "12345678"
 #define EXAMPLE_ESP_MAXIMUM_RETRY 10
 
 #define WIFI_CONNECTED_BIT BIT0
@@ -249,10 +249,10 @@ static esp_err_t root_handler(httpd_req_t *req)
 
 static esp_err_t root_assets_handler(httpd_req_t *req)
 {
-    if (strcasecmp((char *)req->uri, "/assets/Fortron.png") == 0)
+    if (strcasecmp((char *)req->uri, "/assets/Kao.jpeg") == 0)
     {
-        extern const uint8_t Fortron_start[] asm("_binary_Fortron_png_start"); // uint8_t
-        extern const uint8_t Fortron_end[] asm("_binary_Fortron_png_end");     // uint8_t
+        extern const uint8_t Fortron_start[] asm("_binary_Kao_jpeg_start"); // uint8_t
+        extern const uint8_t Fortron_end[] asm("_binary_Kao_jpeg_end");     // uint8_t
         set_content_type_from_file(req, (char *)req->uri);
         httpd_resp_send(req, (char *)Fortron_start, Fortron_end - Fortron_start - 1);
         ESP_LOGI(TAG, "%d req: %s", __LINE__, (char *)req->uri);
