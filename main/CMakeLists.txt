@@ -10,6 +10,7 @@ EMBED_TXTFILES
     "page.html" 
     "assets/code.js" 
     "assets/style.css"
+    "assets/Kao.jpeg"
     "assets/unavailable.jpeg"
     "assets/Fortron.png" 
     "assets/trator.gif" 
