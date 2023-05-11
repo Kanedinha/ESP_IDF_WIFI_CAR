@@ -39,7 +39,8 @@
         "esp_vfs.h": "c",
         "esp_log.h": "c",
         "*.tcc": "cpp",
-        "freertos.h": "c"
+        "freertos.h": "c",
+        "semphr.h": "c"
     }
 }
  

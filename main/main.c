@@ -63,8 +63,8 @@
 
 #define SERVO_CH0_PIN 4
 
-#define EXAMPLE_ESP_WIFI_SSID "agora vai"
-#define EXAMPLE_ESP_WIFI_PASS "12345678"
+#define EXAMPLE_ESP_WIFI_SSID "Experimento Kanedistico"
+#define EXAMPLE_ESP_WIFI_PASS "Kanedastico"
 #define EXAMPLE_ESP_MAXIMUM_RETRY 10
 
 #define WIFI_CONNECTED_BIT BIT0
